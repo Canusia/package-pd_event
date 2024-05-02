@@ -1,0 +1,70 @@
+{% extends base_template %}
+
+{%block title %}{{ page_title }}{% endblock %}
+
+{% load templatehelpers %}
+{% load crispy_forms_tags %}
+
+{% block body %}
+<script>
+   
+</script>
+{% if ajax != '1' %}
+<div class="">
+    <div class="row">
+        <div class="col">
+            <h1 class="h3 mt-3 text-gray-800 mb-3">Add New</h1>
+        </div>
+    </div>
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="#">Home</a></li>
+            <li class="breadcrumb-item"><a href="{% url urls.all_items %}?{% query_transform %}">{{ labels.all_items }}</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Add New</li>
+        </ol>
+    </nav>
+</div>
+{% else %}
+<script>
+</script>
+{% endif %}
+
+{% if ajax != '1' %}
+<main>
+    <div class="row">
+        <div class="col-md-6 col-sm-12 mb-4">
+{% endif %}
+            <div class="card">
+                <div class="card-body">
+                    <h5 class="card-title">Details</h5>
+                    <div class="card-text">
+                        <div class="form_status">
+                            {% if messages %}
+                            <ul class="messages list-group">
+                                {% for message in messages %}
+                                <li{% if message.tags %} class="list-group-item {{ message.tags }}" {% endif %}>{{ message }}</li>
+                                    {% endfor %}
+                            </ul>
+                            {% endif %}
+                        </div>
+                        <form action="" id="form_college_add_new" method="post">
+                            {% csrf_token %}
+                            {{ form | crispy }}
+
+                            {% if ajax == '1' %}
+                                <input type="hidden" name="ajax" value="1">
+                                <input type="hidden" name="model" value="event_type">
+                            {% endif %}
+                            <input type="submit" class="btn btn-primary btn-sm" value="Add Record">
+                        </form>
+                    </div>
+                </div> 
+            </div> <!-- end card -->
+{% if ajax != '1' %}
+        </div> <!-- end col-md-6 -->
+    </div> <!-- end row -->
+</main>
+{% endif %}
+
+{% endblock %}

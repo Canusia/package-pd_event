@@ -1,0 +1,198 @@
+{% extends "cis/logged-base.html" %}
+{%block title %}{{page_title}}{% endblock %}
+
+{% load templatehelpers %}
+
+{% block body %}
+
+<main>
+    <div class="">
+        <div class="row">
+            <div class="col-sm-6 col-xs-12">
+                <h1 class="h3 mb-4 text-gray-800">{{page_title}}&nbsp;
+                    {% if urls.add_new %}
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-primary btn-sm dropdown-toggle" data-toggle="dropdown"
+                            aria-haspopup="true" aria-expanded="false">
+                            Actions
+                        </button>
+                        <div class="dropdown-menu">
+                            <a href="{% url urls.add_new %}" class="dropdown-item"><i
+                                    class="fas fa-plus"></i>&nbsp;&nbsp;Add New</a>
+                        </div>
+                    </div>
+                    {% endif %}
+                </h1>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <div class="">
+                <ul class="nav nav-tabs">
+                    <li class="nav-item">
+                        <a class="nav-link active" data-toggle="tab" href="#all">All</a>
+                    </li>
+                    <li class="nav-item d-none">
+                        <a class="nav-link" data-toggle="tab" href="#archived">Archived</a>
+                    </li>
+                </ul>
+
+                <div class="tab-content">
+                    <div class="tab-pane active" id="all">
+                        <div class="bg-white border border-top-0">
+                            <div class="col-12 pt-3 mb-3">
+                                <div class="row">
+                                    <div class="col-md-12 mb-3">
+                                        <div class="card">
+                                            <div class="card-body bg-gray-200">
+                                                <form id="class_section_filter" class="form-inline filter">
+                                                    <div class="form-row">
+                                                        <div class="col">
+                                                            <div class="float-right">
+                                                                <select class="form-control mt-2" name="cohort">
+                                                                    <option value="">By Subject</option>
+                                                                    {% for c in cohorts %}
+                                                                    <option value="{{c.id}}">{{c.name}}</option>
+                                                                    {% endfor %}
+                                                                </select>&nbsp;
+                                                                <select class="form-control mt-2" name="event_type">
+                                                                    <option value="">By Type</option>
+                                                                    {% for c in event_types %}
+                                                                    <option value="{{c.id}}">{{c.name}}</option>
+                                                                    {% endfor %}
+                                                                </select>
+                                                                &nbsp;
+
+                                                                <select class="form-control mt-2" name="term">
+                                                                    <option value="">By Term</option>
+                                                                    {% for c in terms %}
+                                                                    <option value="{{c.code}}">{{c.label}} {{c.year}}</option>
+                                                                    {% endfor %}
+                                                                </select>
+                                                                <input style="margin-top: 8px; margin-right: 10px;"
+                                                                    type="text" placeholder="Start Date"
+                                                                    name="start_time"
+                                                                    class="form-control dateinput">
+                                                                
+                                                                <div class="clearfix">&nbsp;</div>
+                                                                <input name="btn_search" id="id_btn_filter"
+                                                                    type="button" value="Filter & Get Results"
+                                                                    class="btn btn-primary">
+                                                                    <input name="btn_clear" id="id_btn_clear"
+                                                                    type="reset" value="Clear"
+                                                                    class="btn btn-info">
+                                                            </div>
+
+                                                        </div>
+                                                    </div>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <table id="records_all" class="table dataTable table-striped responsive"
+                                    style="width:100%" data-server-side="true" data-ajax="{{api_url}}">
+                                    <thead>
+                                        <tr>
+                                            <th data-data="cohorts" searchable="1" data-name="cohorts">Cohorts</th>
+                                            <th data-data="event_type.name" searchable="1" data-name="event_type.name">
+                                                Type</th>
+                                            <th data-data="term.code" searchable="1" data-name="term.code">Term
+                                            </th>
+                                            <th data-data="start_time" searchable="1" data-name="start_time">Start Date/Time
+                                            </th>
+                                            <th data-data="end_time" searchable="1" data-name="end_time">End Date/Time</th>
+                                            <th data-data="id" data-name='id'><span class="sr-only">Actions</span></th>
+                                        </tr>
+                                    </thead>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    <!-- end tab # records_active -->
+
+                </div>
+                <!-- end tab-content -->
+                <script>
+                    var table
+                    setInterval(function() {
+
+                        if(!table.rows('.selected').any())
+                            table.ajax.reload(null, false);
+                    }, 1000 * 60);
+                    
+                    $(document).ready(function () {
+
+                        let baseURL = '{{api_url}}'
+
+                        $(document).on("click", "form.filter #id_btn_filter", function () {
+                            load_data();
+                        })
+
+                        function load_data() {
+                            let form = $('form.filter')
+                            let newURL = baseURL + '&' + $(form).serialize();
+
+                            table.ajax.url(newURL).load()
+                        }
+
+                        table = $('#records_all')
+                           .DataTable({
+                                "fnDrawCallback": function( oSettings ) {
+                                    $.unblockUI();
+                                },
+                                dom: 'B<"float-left mt-3 mb-3"l><"float-right mt-3"f><"row clear">rt<"row"<"col-6"i><"col-6 float-right"p>>',
+                                buttons: [
+                                    {
+                                        extend: 'csv', className: 'btn btn-sm btn-primary text-white text-light',
+                                        text: '<i class="fas fa-file-csv text-white"></i>&nbsp;CSV',
+                                        titleAttr: 'Export results to CSV' 
+                                    },
+                                    { 
+                                        extend: 'print', className: 'btn btn-sm btn-primary text-white text-light',
+                                        text: '<i class="fas fa-print text-white"></i>&nbsp;Print',
+                                        titleAttr: 'Print' 
+                                    },
+                                ],
+                                'orderCellsTop': true,
+                                'fixedHeader': true,
+                                ajax: '{{api_url}}&' + $('form.filter').serialize(),
+                                serverSide: true,
+                                processing: true,
+                                'lengthMenu': [30, 50, 100],
+                                'columns': [
+                                    {
+                                        'searchable': false,
+                                        'orderable': false,
+                                        'render': function (data, type, row, meta) {
+                                            return row.cohorts
+                                        }
+                                    },
+                                    null,
+                                    {
+                                        'render': function(data, type, row, meta) {
+                                            return row.term.label
+                                        }
+                                    },
+                                    null,
+                                    null,
+                                    {
+                                        'searchable': false,
+                                        'orderable': false,
+                                        'render': function (data, type, row, meta) {
+                                            return "<a class='btn btn-sm btn-primary' refresh-target='table' href='" + "{{urls.details_prefix}}" + row.id + "'>View Details</a>"
+                                        }
+                                    }
+                                ]
+                            }
+                        );
+
+                    });
+                </script>
+            </div>
+        </div>
+
+</main>
+
+{% endblock %}

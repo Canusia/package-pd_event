@@ -1,0 +1,10 @@
+include LICENSE
+include README.rst
+recursive-include pd_event/admin *
+recursive-include pd_event/models *
+recursive-include pd_event/urls *
+recursive-include pd_event/views *
+recursive-include pd_event/static *
+recursive-include pd_event/templates *
+recursive-include pd_event/management *
+recursive-include pd_event/migrations *

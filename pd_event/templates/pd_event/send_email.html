@@ -1,0 +1,35 @@
+{% extends 'cis/ajax-base.html' %}
+
+{%block title %}Send Email{% endblock %}
+
+{% load templatehelpers %}
+{% load crispy_forms_tags %}
+
+{% block body %}
+
+<div class="card">
+    <div class="card-body">
+        <h3 class="card-title">{{title}}</h3>
+        <div class="card-text">
+            <div class="form_status">
+                {% if messages %}
+                <ul class="messages list-group">
+                    {% for message in messages %}
+                    <li{% if message.tags %} class="list-group-item {{ message.tags }}" {% endif %}>{{ message }}</li>
+                        {% endfor %}
+                </ul>
+                {% endif %}
+            </div>
+
+            {{form.media}}
+            <form method="post" class="frm_ajax" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ form | crispy }}
+                <input type="submit" class="btn btn-primary btn-sm" value="Send Email">
+            </form>
+        </div>
+    </div> 
+</div> <!-- end card -->
+
+
+{% endblock %}

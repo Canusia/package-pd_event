@@ -1,0 +1,50 @@
+{% extends "cis/logged-base-modal.html" %}
+{%block title %}{{ page_title }}{% endblock %}
+
+{% load templatehelpers %}
+{% load crispy_forms_tags %}
+
+{% block body %}
+<main>
+    <div class="row">
+        <div class="col-md-12 col-sm-12">
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <a class="nav-link active" data-toggle="tab" href="#details">Details</a>
+                </li>
+            </ul>
+
+            <!-- Tab panes -->
+            <div class="tab-content">
+                <div class="tab-pane active" id="details">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 pt-3 mb-3">
+                            <div class="">
+                                <div class="">
+                                    <div class="">
+                                        {% if messages %}
+                                        <ul class="messages list-group">
+                                            {% for message in messages %}
+                                            <li{% if message.tags %} class="list-group-item {{ message.tags }}"
+                                                {% endif %}>
+                                                {{ message }}</li>
+                                                {% endfor %}
+                                        </ul>
+                                        {% endif %}
+                                        <form action="" method="post">
+                                            {% csrf_token %}
+                                            {{ form | crispy }}
+                                            <input type="submit" class="btn btn-primary btn-sm" value="Update">
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end tab #details -->
+            </div>
+        </div>
+    </div>
+</main>
+{%endblock%}

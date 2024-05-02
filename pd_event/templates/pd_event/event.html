@@ -1,0 +1,942 @@
+{% extends "cis/logged-base.html" %}
+{%block title %}{{ page_title }}{% endblock %}
+
+{% load templatehelpers %}
+{% load crispy_forms_tags %}
+
+{% block body %}
+<main>
+
+    <div class="row">
+        
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href='/ce/events/' >All Events</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">Event</li>
+                </ol>
+            </nav>
+        </div>
+
+        <div class="col-md-12 col-sm-12">
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <a class="nav-link active" data-toggle="tab" href="#details">Details</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#files">Files</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#guest_list">Manage Guest List</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#manage_attendance">Manage Attendance</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#notes">Notes</a>
+                </li>
+            </ul>
+
+            <script>
+                jQuery(document).ready(function($) {
+
+                    $('form.frm_ajax').submit(function(event) {
+
+                        var blocked_element = $(this).parent()
+                        $(blocked_element).block();
+                        event.preventDefault()
+
+                        form = $(this)
+
+                        if($("input, select, textarea").hasClass('is-invalid'))
+                            $("input, select, textarea").removeClass('is-invalid')
+                        
+                        if($("input, select, textarea").next('p').length) 
+                            $("input, select, textarea").nextAll('p').empty();
+
+                        let action = $(form).attr('action')
+                        let first_element = '';
+                        
+                        $.post({
+                            url: action,
+                            data: $(form).serialize(),
+                            error: function(xhr, status, error) {
+
+                                let errors = $.parseJSON(xhr.responseJSON.errors);
+                                
+                                for (var name in errors) {
+                                    for (var i in errors[name]) {
+                                        var $input = $("[name='"+ name +"']");
+                                        $input.addClass('is-invalid');
+
+                                        $input.after("<p class='invalid-feedback'><strong class=''>" + errors[name][i].message + "</strong></p>");
+                                    }
+
+                                    if(first_element == '')
+                                        $input.focus()
+                                    else {
+                                        first_element = '-'
+                                    }
+                                }
+
+                                var span = document.createElement('span')
+                                span.innerHTML = xhr.responseJSON.message
+                                swal({
+                                    title: xhr.responseJSON.message,
+                                    content: span,
+                                    icon: 'warning'
+                                });
+
+                                $(blocked_element).unblock();
+                            },
+                            success: function(response) {
+                                swal({
+                                    title: 'Success',
+                                    text: response.message,
+                                    icon: response.status
+                                }).then(
+                                    (value) => {
+                                        if(response.action == 'reload')
+                                            location.reload();
+                                    }
+                                )
+                                $(blocked_element).unblock();
+                            }
+                        })
+                        return false
+                    });
+                });
+            </script>
+
+            {% if messages %}
+            <ul class="messages list-group m-2">
+                {% for message in messages %}
+                <li{% if message.tags %} class="list-group-item {{ message.tags }}" {% endif %}>
+                    {{ message }}</li>
+                    {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if read_only %}
+            <script>
+                jQuery(document).ready(function($) {
+                    $("input, select, textarea").prop("disabled", true);
+                    $("input[type=submit], input[type=button], tfoot, .ajax-add_new").hide()
+                });
+            </script>
+            {% endif %}
+            <!-- Tab panes -->
+            <div class="tab-content">
+                <div class="tab-pane active" id="details">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 pt-3 mb-3">
+                            <div class="">
+                                <div class="">
+                                    <div class="">
+                                        {{form.media}}
+                                        <form action="" method="post">
+                                            {% csrf_token %}
+                                            {{ form | crispy }}
+                                            <input type="submit" class="btn btn-primary btn-sm" value="Update">
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end tab #details -->
+
+                <div class="tab-pane" id="notes">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 pt-3 mb-3">
+                            <div class="">
+                                <div class="">
+                                    <div class="text-right">
+                                        <a href="#notes" class="btn btn-sm btn-primary ajax-add_new"
+                                            data-parent="{{record.id}}" data-id="-1" data-modal="modal-add_new"
+                                            data-model="eventnote" data-updater=""><i
+                                                class="fa fas-light fa-plus-circle"></i>&nbsp;Add New Note</a>
+                                    </div>
+                                    <div class="clearfix">&nbsp;</div>
+                                    <div class="table-responsive">
+                                        <table class="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Added On</th>
+                                                    <th>Note</th>
+                                                    <th>Added By</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% if notes %}
+                                                    {% for r in notes %}
+                                                    <tr>
+                                                        <td>{{r.createdon|date:'m/d/Y g:i a'}}</td>
+                                                        <td>
+                                                            {{r.note|safe}}
+                                                        </td>
+                                                        <td>{{r.createdby.first_name}} {{r.createdby.last_name}}</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <tr>
+                                                        <td colspan="3">No notes found</td>
+                                                    </tr>
+                                                {% endif %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end Notes -->
+
+                <div class="tab-pane" id="files">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 pt-3 mb-3">
+                            <div class="">
+                                <div class="">
+                                    <table class="table table-striped">
+                                        <thead>
+                                            <tr>
+                                                <th>File</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        {%if files %}
+                                        {%for file in files%}
+                                        <tr>
+                                            <td><a href="{{file.media.url}}">{{file.media|getfilename}}</a></td>
+                                            <td>
+                                                <a href="{% url "pd_event:remove_upload" file.id %}">Delete</a>
+                                            </td>
+                                        </tr>
+                                        {%endfor%}
+                                        {%else%}
+                                        <tr>
+                                            <td colspan="2">No files found</td>
+                                        </tr>
+                                        {%endif%}
+                                    </table>
+                                    <div class="card">
+                                        <div class="card-body">
+                                            <h4>Add New File</h4>
+                                            <div class="">
+                                                <form action="" method="post" enctype="multipart/form-data">
+                                                    {% csrf_token %}
+                                                    {{ file_form | crispy }}
+                                                    <input type="submit" class="btn btn-primary btn-sm" value="Save">
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end tab #files -->
+
+                <div class="tab-pane" id="manage_attendance">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 pt-3 mb-3">
+
+                            <form action="" method="post">
+                                {% csrf_token %}
+                                <div class="table-responsive">
+                                    <table style="width: 100%" class="table table-striped" id="event_attendee_list">
+                                        <thead>
+                                            <tr>
+                                                <th data-name='id' data-data='id'><input style='height: 13px;' type="checkbox" class="form-control toggle-button"
+                                                    name="select-all" id="select-all" /></th>
+                                                <th data-name='name' data-data='name'>Name</th>
+                                                <th data-name='attendee_type' data-data='attendee_type'>
+                                                    Attendee
+                                                    Type</th>
+                                                <th data-data='attendance_type' data-name='attendance_type'>
+                                                    Attendance Type</th>
+                                                <th>Status</th>
+                                                <th>PD Hours / Participants</th>
+                                                <th>Note</th>
+                                            </tr>
+                                        </thead>
+
+                                        <tfoot>
+                                            <tr>
+                                                <td colspan="6">
+                                                    <input type="button" class="btn btn-sm btn-primary btn_mark_attendance"
+                                                        data-attendance="attended" id="btn_mark_attended_selected"
+                                                        value="Mark as Attended" name="mark_attended_selected">&nbsp;
+                                                    <input type="button" class="btn btn-sm btn-secondary btn_mark_attendance"
+                                                        data-attendance="not attended"
+                                                        id="btn_mark_not_attended_selected" value="Mark as Not Attended"
+                                                        name="mark_not_attended_selected">&nbsp;
+                                                        <a href="{%url 'pd_event:export_attendee_list' record.id %}" class="btn btn-sm btn-info d-none">Export Attendee List</a>&nbsp;<input type="button" class="btn btn-sm btn-primary btn_send_pd_letter"
+                                                        data-attendance="send_pd_letter"
+                                                        id="btn_send_pd_letter" value="Send PD Letter"
+                                                        name="send_pd_letter">&nbsp;
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </form>
+
+                            <div class="clearfix">&nbsp;</div>
+                                    
+                                    <div class="card border-0">
+                                        <div class="card-body">
+                                            <ul class="nav nav-tabs">
+                                                <li class="nav-item">
+                                                    <a class="nav-link active" data-toggle="tab" href="#details_send_email">Send Email</a>
+                                                </li>
+                                            </ul>
+
+                                            <div class="tab-content">
+                                                <div class="tab-pane active" id="details_send_email">
+
+                                                    <div class="bg-white border border-top-0">
+                                                        <div class="col-12 p-3 mb-3">
+
+            {{email_after_form.media}}
+            <form method="post" class="frm_ajax" action="{% url 'pd_event:event' record.id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ email_after_form | crispy }}
+                <input type="submit" class="btn btn-primary btn-sm" value="Send Email">
+            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                            </div>
+
+                                      </div>
+                                    </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane" id="guest_list">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 pt-3 mb-3">
+                            <div class="">
+                                <div class="">
+                                    <form action="" method="post">
+                                        {% csrf_token %}
+                                        <div class="table-responsive">
+                                            <table style="width: 100%" class="table table-striped" id="tbl_event_guests">
+                                                <thead>
+                                                    <tr>
+                                                        <th data-name='id' data-data='id'>
+                                                            <input style='height: 13px;' type="checkbox" class="toggle-button"
+                                                                name="select-all" id="select-all" />
+                                                        </th>
+                                                        <th data-name='name' data-data='name'>Name</th>
+                                                        <th data-name='attendee_type' data-data='attendee_type'>
+                                                            Attendee
+                                                            Type</th>
+                                                        <th data-data='attendance_type' data-name='attendance_type'>
+                                                            Attendance Type</th>
+                                                    </tr>
+                                                </thead>
+
+                                                <tfoot>
+                                                    <tr>
+                                                        <td colspan="4">
+                                                            <input type="button" class="btn btn-sm btn-primary"
+                                                                id="btn_remove_selected" value="Remove Selected"
+                                                                name="remove_selected">
+                                                            &nbsp;<input type="button" class="btn btn-sm btn-info"
+                                                                id="btn_toggle_selected" value="Change Attendance Type"
+                                                                name="toggle_selected">&nbsp;
+                                                                <a href="{%url 'pd_event:export_attendee_list' record.id %}" class="btn btn-sm btn-primary">Export Attendee List</a>&nbsp;<a href="{%url 'pd_event:export_signin_sheet' record.id %}" class="btn btn-sm btn-info">Export Sign-in Sheet</a>
+                                                        </td>
+                                                    </tr>
+                                                </tfoot>
+                                            </table>
+                                        </div>
+                                    </form>
+                                    <div class="clearfix">&nbsp;</div>
+                                    
+                                    <div class="card border-0">
+                                        <div class="card-body">
+                                            <ul class="nav nav-tabs">
+                                                <li class="nav-item">
+                                                    <a class="nav-link active" data-toggle="tab" href="#details_add_new">Add New Guest(s)</a>
+                                                </li>
+                                                <li class="nav-item">
+                                                    <a class="nav-link" data-toggle="tab" href="#details_send_email">Send Email</a>
+                                                </li>
+                                            </ul>
+
+                                            <div class="tab-content">
+                                                <div class="tab-pane" id="details_send_email">
+
+                                                    <div class="bg-white border border-top-0">
+                                                        <div class="col-12 p-3 mb-3">
+
+            {{email_form.media}}
+            <form method="post" class="frm_ajax" action="{% url 'pd_event:event' record.id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ email_form | crispy }}
+                <input type="submit" class="btn btn-primary btn-sm" value="Send Email">
+            </form>
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div class="tab-pane active" id="details_add_new">
+
+                                                    <div class="bg-white border border-top-0">
+                                                        <div class="col-12 p-3 mb-3">
+                                                            <div class="">
+                                                                <form id="frm_guest_search" action="" method="post">
+                                                                    {% csrf_token %}
+                                                                    {{ attendee_form | crispy }}
+                                                                    <input type="button" id="btn_search_guest_list"
+                                                                        class="btn btn-primary btn-sm" value="Search">
+                                                                </form>
+
+                                                                <script>
+
+                                                                    var attendees = $("#event_attendee_list").DataTable();
+                                                                    get_event_attendees();
+                                                                    function get_event_attendees() {
+                                                                        attendees.destroy();
+
+                                                                        $.blockUI();
+
+                                                                        attendees = $('#event_attendee_list').DataTable({
+                                                                            // serverSide: true,
+                                                                            order: [[1, 'asc']],
+                                                                            initComplete: function (settings, json) {
+                                                                                $.unblockUI();
+                                                                            },
+                                                                            processing: true,
+                                                                            ajax: "{%url 'pd_event:attendees' record.id%}",
+                                                                            lengthMenu: [50, 100],
+                                                                            columns: [
+                                                                                {
+                                                                                    'searchable': false,
+                                                                                    'orderable': false,
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        return '<input type="checkbox" name="attendee" id="id_registration_' + row.id + '" value="' + row.id + '">';
+                                                                                    }
+                                                                                },
+                                                                                {
+                                                                                    'searchable': false,
+                                                                                    'orderable': false,
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        return row.name
+                                                                                    }
+                                                                                },
+                                                                                {
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        if(row.attendee_type == 'Highschool')
+                                                                                            return 'High School';
+                                                                                        return row.attendee_type
+                                                                                    }
+                                                                                },
+                                                                                {
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        return row.attendance_type
+                                                                                    }
+                                                                                },
+                                                                                {
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        return row.attendance_status
+                                                                                    }
+                                                                                },
+                                                                                {
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        if (row.attendee_type != 'highschool')
+                                                                                            var download_url = '';
+                                                                                            if(row.pd_letter_sent_on == '-') {
+                                                                                                return '';
+                                                                                            } else {
+                                                                                                download_url = "<a title='Download PD letter' target='_blank' href='" + row.pd_letter + "'><i class='fa fa-download'></i></a>"
+                                                                                            }
+                                                                                            return "<input size='4' type='text' class='form-control update_count' data-id='" + row.id + "' data-key='pd_hour' value='" + row.pd_hour + "' />" + "<small class='text-muted'>Letter Last Sent On - " + row.pd_letter_sent_on + "&nbsp;" + download_url + "</small>";
+                                                                                        return "<input type='text' class='update_count' size='4' data-id='" + row.id + "' data-key='participants' value='" + row.participants + "' />"
+                                                                                    }
+                                                                                },
+                                                                                {
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        return "<input type='text' class='form-control update_count' data-id='" + row.id + "' data-key='note' value='" + row.note + "' />"
+                                                                                    }
+                                                                                }
+                                                                            ]
+                                                                        })
+
+                                                                        return false;
+                                                                    }
+
+                                                                    var tbl_event_guests = $('#tbl_event_guests').DataTable({
+                                                                order: [[1, 'asc']],
+                                                                        initComplete: function (settings, json) {
+                                                                            $.unblockUI();
+                                                                            if (!tbl_event_guests.data().any()) {
+                                                                                $("#btn_remove_selected").hide();
+                                                                                $("#btn_toggle_selected").hide();
+                                                                            } else {
+                                                                                $("#btn_remove_selected").show();
+                                                                                $("#btn_toggle_selected").show();
+                                                                            }
+                                                                        },
+                                                                        processing: true,
+                                                                        ajax: "{%url 'pd_event:attendees' record.id%}",
+                                                                        lengthMenu: [10, 20, 50, 100],
+                                                                        columns: [
+                                                                            {
+                                                                                'searchable': false,
+                                                                                'orderable': false,
+                                                                                'render': function (data, type, row, meta) {
+                                                                                    return '<input type="checkbox" name="attendee" id="id_registration_' + row.id + '" value="' + row.id + '">';
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                'searchable': false,
+                                                                                'orderable': false,
+                                                                                'render': function (data, type, row, meta) {
+                                                                                    return row.name
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                'render': function (data, type, row, meta) {
+                                                                                    if(row.attendee_type == 'Highschool')
+                                                                                        return 'High School';
+                                                                                    return row.attendee_type
+                                                                                }
+                                                                            },
+                                                                            {
+                                                                                'render': function (data, type, row, meta) {
+                                                                                    return row.attendance_type
+                                                                                }
+                                                                            }
+                                                                        ]
+                                                                    })
+                                                                    
+                                                                    // get_event_guests();
+
+                                                                    function remove_selected() {
+                                                                        let form = $(this).closest('form');
+                                                                        let registrations = $(form).serialize();
+
+                                                                        $.blockUI();
+                                                                        $.post({
+                                                                            url: "{%url 'pd_event:remove_attendee' record.id%}",
+                                                                            data: registrations,
+                                                                            dataType: 'json',
+                                                                            success: function (response) {
+                                                                                $.unblockUI();
+
+
+                                                                                if (response.status == 'success') {
+                                                                                    swal(
+                                                                                        "",
+                                                                                        response.message,
+                                                                                        "success")
+                                                                                } else {
+                                                                                    swal(
+                                                                                        "",
+                                                                                        response.message,
+                                                                                        "warning")
+                                                                                }
+
+                                                                                get_event_guests()
+                                                                                get_event_attendees()
+                                                                            }
+                                                                        })
+                                                                        return false;
+                                                                    }
+
+
+                                                                    function send_reminder_email() {
+                                                                        let form = $(this).closest('form');
+                                                                        let registrations = $(form).serialize();
+
+                                                                        $.blockUI();
+
+                                                                        modal = $(this).attr("data-modal")
+                                                                        $.ajax({
+                                                                        type: "GET",
+                                                                        url: "{%url 'pd_event:send_reminder_email' record.id%}",
+                                                                        success: function (response) {
+                                                                            $("#modal_content").html(response);
+                                                                            $("#" + modal).modal('show');
+                                                                            $.unblockUI();
+                                                                        },
+                                                                        error: function (response) {
+                                                                            alert(response);
+                                                                        }
+                                                                        });
+                                                                    }
+
+
+                                                                    function toggle_selected() {
+                                                                        let form = $(this).closest('form');
+                                                                        let registrations = $(form).serialize();
+
+                                                                        $.blockUI();
+                                                                        $.post({
+                                                                            url: "{%url 'pd_event:toggle_attendee' record.id%}",
+                                                                            data: registrations,
+                                                                            dataType: 'json',
+                                                                            success: function (response) {
+                                                                                $.unblockUI();
+
+
+                                                                                if (response.status == 'success') {
+                                                                                    swal(
+                                                                                        "",
+                                                                                        response.message,
+                                                                                        "success")
+                                                                                } else {
+                                                                                    swal(
+                                                                                        "",
+                                                                                        response.message,
+                                                                                        "warning")
+                                                                                }
+
+                                                                                get_event_guests()
+                                                                                get_event_attendees()
+                                                                            }
+                                                                        })
+                                                                        return false;
+                                                                    }
+
+                                                                    function get_event_guests() {
+                                                                        tbl_event_guests.ajax.reload()
+                                                                    }
+
+                                                                    jQuery(document).ready(function () {
+                                                                        $("#btn_remove_selected").on('click', remove_selected);
+
+                                                                        $("#btn_toggle_selected").on('click', toggle_selected);
+
+                                                                        $("#btn_send_reminder_email").on('click', send_reminder_email);
+
+                                                                        $(document).on('change', '#id_attendee_type', update_filter);
+
+                                                                        function update_filter() {
+                                                                            let a_type = $(this).val();
+
+                                                                            $("#guest_list_results_container").addClass('d-none');
+
+                                                                            $('#div_id_cohort, #div_id_course, #div_id_instructor_course_status, #div_id_since, #div_id_fac_assistant').hide()
+
+                                                                            if (a_type == 'instructor')
+                                                                                $('#div_id_cohort, #div_id_course, #div_id_instructor_course_status, #div_id_since').show()
+
+                                                                            if (a_type == 'cohort_participant')
+                                                                                $('#div_id_cohort').show()
+
+                                                                            if (a_type == 'faculty')
+                                                                                $('#div_id_cohort, #div_id_fac_assistant').show()
+                                                                        }
+
+                                                                        $('#div_id_fac_assistant').hide()
+
+                                                                        var table = $('#guest_list_results').DataTable()
+                                                                        let cohort = $('#id_cohort')
+                                                                        let course = $('#id_course')
+                                                                        let instructor_course_status = $("#id_instructor_course_status")
+                                                                        $(cohort).attr('multiple', 'multiple')
+                                                                        $(course).attr('multiple', 'multiple')
+                                                                        $(instructor_course_status).attr('multiple', 'multiple')
+
+                                                                        function get_guest_results() {
+                                                                            let attendee_type = $('#id_attendee_type')
+                                                                            let cohort = $('#id_cohort')
+                                                                            let course = $('#id_course')
+                                                                            let instructor_course_status = $("#id_instructor_course_status")
+                                                                            let campus_code = ""
+
+                                                                            if ($(attendee_type).val() == '') {
+                                                                                swal(
+                                                                                    "Error",
+                                                                                    "Please select attendee type and try again.",
+                                                                                    "error")
+                                                                                $(subject).focus()
+                                                                                return false;
+                                                                            }
+                                                                            table.destroy();
+
+                                                                            $.blockUI();
+                                                                            $("#guest_list_results_container").removeClass('d-none');
+
+                                                                            let filters = $('#frm_guest_search').serialize();
+                                                                            table = $('#guest_list_results').DataTable({
+                                                                                // serverSide: true,
+                                                                                order: [[1, 'asc']],
+                                                                                initComplete: function (settings, json) {
+                                                                                    $.unblockUI();
+
+                                                                                    if (!table.data().any()) {
+                                                                                        swal(
+                                                                                            "",
+                                                                                            "Your search did not produce any results. Please try a different search criteria.",
+                                                                                            "warning")
+                                                                                        $(".btn_apply_for_selected").hide();
+                                                                                    } else {
+                                                                                        $(".btn_apply_for_selected").show();
+                                                                                    }
+                                                                                },
+                                                                                ajax: "{% url 'pd_event:search_guest_list' %}?format=datatables&" + filters,
+                                                                                lengthMenu: [50, 100],
+                                                                                columns: [
+                                                                                    {
+                                                                                        'width': '5%',
+                                                                                        'orderable': false,
+                                                                                        'render': function (data, type, row, meta) {
+                                                                                            return '<input type="checkbox" name="attendee" id="id_attendee_' + row.id + '" value="' + row.id + '">';
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        'width': '50%',
+                                                                                        'render': function (data, type, row, meta) {
+                                                                                            return row.name
+                                                                                        }
+                                                                                    }
+                                                                                ]
+                                                                            })
+
+                                                                            return false;
+                                                                        }
+
+                                                                        $("#btn_search_guest_list").on('click', get_guest_results);
+                                                                    });
+
+
+                                                                    $(document).on('click', '.btn_apply_for_selected', apply_for_selected);
+
+                                                                    function apply_for_selected() {
+                                                                        let attendance_type = $(this).attr('data-attendance')
+
+                                                                        let form = $(this).closest('form');
+                                                                        let records = $(form).serialize() + '&attendance_type=' + attendance_type + '&type=' + $('#id_attendee_type').val();
+
+                                                                        $.blockUI();
+                                                                        $.post({
+                                                                            url: "{% url 'pd_event:add_attendee' record.id %}",
+                                                                            data: records,
+                                                                            dataType: 'json',
+                                                                            success: function (response) {
+                                                                                $.unblockUI();
+
+                                                                                if (response.status == 'success') {
+                                                                                    swal(
+                                                                                        "",
+                                                                                        response.message,
+                                                                                        "success")
+                                                                                } else {
+                                                                                    swal(
+                                                                                        "",
+                                                                                        response.message,
+                                                                                        "warning")
+                                                                                }
+
+                                                                                get_event_guests()
+                                                                                get_event_attendees()
+                                                                            }
+                                                                        })
+                                                                        return false;
+                                                                    }
+
+                                                                    $(document).on('change', '#id_cohort', load_course);
+                                                                    function load_course() {
+                                                                        let dropdown = $('#id_course')
+                                                                        let cohorts = $('#id_cohort')
+
+                                                                        $("#class_search_results_container").addClass('d-none');
+                                                                        dropdown.empty()
+                                                                        dropdown.prop('selectedIndex', 0)
+
+                                                                        $.blockUI();
+
+                                                                        let url = "{% url 'pd_event:get_courses' %}" + '?cohort=' + $(cohorts).val()
+
+                                                                        $.getJSON(url, function (data) {
+                                                                            $.each(data.data, function (key, entry) {
+
+                                                                                dropdown.append(
+                                                                                    $('<option></option>').attr(
+                                                                                        'value', entry.id
+                                                                                    ).text(
+                                                                                        entry.name
+                                                                                    )
+                                                                                )
+                                                                            });
+
+                                                                            $.unblockUI();
+                                                                        })
+                                                                    }
+
+                                                                    $(document).on('click', '.btn_send_pd_letter', send_pd_letter);
+
+                        function send_pd_letter() {
+                            let attendance_status = $(this).attr('data-attendance')
+
+                            let form = $(this).closest('form');
+                            let records = $(form).serialize();
+
+                            $.blockUI();
+                            $.post({
+                                url: "{% url 'pd_event:email_pd_letter' record.id %}",
+                                data: records,
+                                dataType: 'json',
+                                success: function (response) {
+                                    $.unblockUI();
+
+                                    if (response.status == 'success') {
+                                        swal(
+                                            "",
+                                            response.message,
+                                            "success")
+                                    } else {
+                                        swal(
+                                            "",
+                                            response.message,
+                                            "warning")
+                                    }
+
+                                    get_event_attendees()
+                                }
+                            })
+                            return false;
+                        }
+                                                                    $(document).on('click', '.btn_mark_attendance', mark_attendance);
+
+                                                                    function mark_attendance() {
+                                                                        let attendance_status = $(this).attr('data-attendance')
+
+                                                                        let form = $(this).closest('form');
+                                                                        let records = $(form).serialize() + '&attendance_status=' + attendance_status + '&type=';
+
+                                                                        $.blockUI();
+                                                                        $.post({
+                                                                            url: "{% url 'pd_event:mark_attendance' record.id %}",
+                                                                            data: records,
+                                                                            dataType: 'json',
+                                                                            success: function (response) {
+                                                                                $.unblockUI();
+
+                                                                                if (response.status == 'success') {
+                                                                                    swal(
+                                                                                        "",
+                                                                                        response.message,
+                                                                                        "success")
+                                                                                } else {
+                                                                                    swal(
+                                                                                        "",
+                                                                                        response.message,
+                                                                                        "warning")
+                                                                                }
+
+                                                                                get_event_attendees()
+                                                                            }
+                                                                        })
+                                                                        return false;
+                                                                    }
+
+                                                                    $(document).on('keyup', '.update_count', update_count)
+                                                                    function update_count() {
+                                                                        let val = $(this).val()
+                                                                        let key = $(this).attr('data-key')
+                                                                        let id = $(this).attr('data-id')
+
+                                                                        let records = 'key=' + key + '&val=' + val + '&attendee=' + id;
+
+                                                                        $.get({
+                                                                            url: "{% url 'pd_event:update_count' record.id %}",
+                                                                            data: records,
+                                                                            dataType: 'json',
+                                                                            success: function (response) {
+
+                                                                            }
+                                                                        })
+                                                                        return false;
+                                                                    }
+
+                                                                    $(document).on('click', '.toggle-button', function () {
+                                                                        let table = $(this).closest('table');
+
+                                                                        $('#' + $(table).attr('id') + ' input[type="checkbox"]').prop('checked', this.checked)
+                                                                    })
+                                                                </script>
+
+
+                                                                <div id="guest_list_results_container" class=" mt-4 d-none">
+                                                                    <form action="" method="post">
+                                                                        {% csrf_token %}
+                                                                        <div class="table-responsive">
+                                                                            <table class="table dataTable table-striped"
+                                                                                id="guest_list_results">
+                                                                                <thead>
+                                                                                    <tr>
+                                                                                        <th data-name='id' data-data='id'>
+                                                                                            <input style='height: 13px;' type="checkbox" class="form-control toggle-button"
+                                                                                                name="select-all" id="select-all" />
+                                                                                        </th>
+                                                                                        <th data-name='name' data-data='name'>Name
+                                                                                        </th>
+                                                                                    </tr>
+                                                                                </thead>
+
+                                                                                <tfoot>
+                                                                                    <tr>
+                                                                                        <td colspan="2">
+                                                                                            <input type="button"
+                                                                                                class="btn btn-primary btn_apply_for_selected"
+                                                                                                id="btn_apply_for_required"
+                                                                                                value="Add as Required"
+                                                                                                data-attendance='required'
+                                                                                                name="apply_for_selected">
+                                                                                            &nbsp;<input type="button"
+                                                                                                class="btn btn-primary btn_apply_for_selected"
+                                                                                                id="btn_apply_for_optional"
+                                                                                                data-attendance='optional'
+                                                                                                value="Add as Optional"
+                                                                                                name="apply_for_selected">
+                                                                                        </td>
+                                                                                    </tr>
+                                                                                </tfoot>
+                                                                            </table>
+                                                                            <script>
+                                                                                jQuery(document).ready(function ($) {
+                                                                                    $('#activate_applied_classes').click(function () {
+                                                                                        $("#tab_applied_classes").tab('show');
+                                                                                    })
+                                                                                })
+                                                                            </script>
+                                                                        </div>
+                                                                    </form>
+
+
+
+                                                                </div> <!-- end #guest_list_results_container -->
+
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                </div>
+                                            </div>
+
+                                      </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end tab #files -->
+            </div>
+        </div>
+    </div>
+</main>
+{%endblock%}
