@@ -42,3 +42,9 @@ class PdEventConfig(AppConfig):
             ]
         },
     ]
+
+class DevPdEventConfig(AppConfig):
+    name = 'pd_event.pd_event'
+
+    CONFIGURATORS = PdEventConfig.CONFIGURATORS
+    REPORTS = PdEventConfig.REPORTS

@@ -1,13 +1,13 @@
 from django.urls import path, include
 
-from pd_event.views.event_type import (
+from ..views.event_type import (
     index as event_types,
     detail as event_type,
     add_new as add_event_type,
     EventTypeViewSet
 )
 
-from pd_event.views.event import (
+from ..views.event import (
     index as events,
     detail as event,
     add_new as add_event,

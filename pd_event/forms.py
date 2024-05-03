@@ -11,7 +11,7 @@ from django.utils.safestring import mark_safe
 from cis.models.course import Cohort, Course
 from cis.models.teacher import Teacher, TeacherHighSchool, TeacherCourseCertificate
 from cis.models.faculty import FacultyCoordinator
-from pd_event.models import (
+from .models import (
     EventType,
     Event,
     EventAttendee,
