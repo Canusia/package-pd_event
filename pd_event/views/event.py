@@ -821,6 +821,6 @@ def index(request):
             'terms': Term.objects.all().order_by('-code'),
             'cohorts': Cohort.objects.all().order_by('name'),
             'event_types': EventType.objects.all().order_by('name'),
-            'api_url': '/ce/events/api/events?format=datatables'
+            'api_url': '/cis/events/api/events?format=datatables'
         }
     )
