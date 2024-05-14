@@ -34,9 +34,10 @@ class EventEmailForm(forms.Form):
 
     email_to = forms.ChoiceField(
         choices=[
+            # ('to_all_guests', 'All Guests'),
+            ('to_all', 'All Guests'),
             ('to_attendees', 'All Marked as Attended'),
             ('to_not_attendees', 'All Marked as Not Attended'),
-            ('to_all', 'All Guests'),
         ]
     )
 
@@ -88,15 +89,12 @@ class EventEmailForm(forms.Form):
 
         from pd_event.models import EventAttendee
 
-        if not data.get('email_to'):
-            attendees = event.event_guests
+        if data.get('email_to') == 'to_attendees':
+            attendees = event.marked_as_attended
+        elif data.get('email_to') == 'to_not_attendees':
+            attendees = event.marked_as_not_attended
         else:
-            if data.get('email_to') == 'to_attendees':
-                attendees = event.marked_as_attended
-            elif data.get('email_to') == 'to_not_attendees':
-                attendees = event.marked_as_not_attended
-            else:
-                attendees = event.event_guests
+            attendees = event.event_guests
 
 
         to_list = []

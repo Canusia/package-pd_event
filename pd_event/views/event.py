@@ -690,9 +690,9 @@ def detail(request, record_id):
                     'list-group-item-success')
                 return redirect('pd_event:event', record_id=record_id)
     
-    notes = EventNote.objects.filter(
-        event=record
-    )
+    # notes = EventNote.objects.filter(
+    #     event=record
+    # )
 
     read_only = False
     if user_has_faculty_role(request.user):
@@ -724,7 +724,7 @@ def detail(request, record_id):
             'urls': urls,
             'read_only': read_only,
             'menu': menu,
-            'notes': notes,
+            # 'notes': notes,
             'record': record
         })
 
@@ -821,6 +821,6 @@ def index(request):
             'terms': Term.objects.all().order_by('-code'),
             'cohorts': Cohort.objects.all().order_by('name'),
             'event_types': EventType.objects.all().order_by('name'),
-            'api_url': '/cis/events/api/events?format=datatables'
+            'api_url': '/ce/events/api/events?format=datatables'
         }
     )

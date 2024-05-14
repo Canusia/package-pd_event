@@ -34,6 +34,9 @@
                     <a class="nav-link" data-toggle="tab" href="#manage_attendance">Manage Attendance</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#send_email">Send Email</a>
+                </li>
+                <li class="nav-item d-none">
                     <a class="nav-link" data-toggle="tab" href="#notes">Notes</a>
                 </li>
             </ul>
@@ -128,6 +131,20 @@
             {% endif %}
             <!-- Tab panes -->
             <div class="tab-content">
+                <div class="tab-pane" id="send_email">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 p-3 mb-3">
+
+            {{email_after_form.media}}
+            <form method="post" class="frm_ajax" action="{% url 'pd_event:event' record.id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ email_after_form | crispy }}
+                <input type="submit" class="btn btn-primary btn-sm" value="Send Email">
+            </form>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="tab-pane active" id="details">
                     <div class="bg-white border border-top-0">
                         <div class="col-12 pt-3 mb-3">
@@ -288,34 +305,6 @@
 
                             <div class="clearfix">&nbsp;</div>
                                     
-                                    <div class="card border-0">
-                                        <div class="card-body">
-                                            <ul class="nav nav-tabs">
-                                                <li class="nav-item">
-                                                    <a class="nav-link active" data-toggle="tab" href="#details_send_email">Send Email</a>
-                                                </li>
-                                            </ul>
-
-                                            <div class="tab-content">
-                                                <div class="tab-pane active" id="details_send_email">
-
-                                                    <div class="bg-white border border-top-0">
-                                                        <div class="col-12 p-3 mb-3">
-
-            {{email_after_form.media}}
-            <form method="post" class="frm_ajax" action="{% url 'pd_event:event' record.id %}" enctype="multipart/form-data">
-                {% csrf_token %}
-                {{ email_after_form | crispy }}
-                <input type="submit" class="btn btn-primary btn-sm" value="Send Email">
-            </form>
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                            </div>
-
-                                      </div>
-                                    </div>
                         </div>
                     </div>
                 </div>
@@ -368,26 +357,13 @@
                                                 <li class="nav-item">
                                                     <a class="nav-link active" data-toggle="tab" href="#details_add_new">Add New Guest(s)</a>
                                                 </li>
-                                                <li class="nav-item">
+                                                <li class="nav-item d-none">
                                                     <a class="nav-link" data-toggle="tab" href="#details_send_email">Send Email</a>
                                                 </li>
                                             </ul>
 
                                             <div class="tab-content">
-                                                <div class="tab-pane" id="details_send_email">
-
-                                                    <div class="bg-white border border-top-0">
-                                                        <div class="col-12 p-3 mb-3">
-
-            {{email_form.media}}
-            <form method="post" class="frm_ajax" action="{% url 'pd_event:event' record.id %}" enctype="multipart/form-data">
-                {% csrf_token %}
-                {{ email_form | crispy }}
-                <input type="submit" class="btn btn-primary btn-sm" value="Send Email">
-            </form>
-                                                        </div>
-                                                    </div>
-                                                </div>
+                                                
 
                                                 <div class="tab-pane active" id="details_add_new">
 
