@@ -25,7 +25,8 @@ from ..views.event import (
     pd_letter,
     email_pd_letter,
     event_signin_sheet,
-    send_reminder
+    send_reminder,
+    delete as delete_event
 )
 from rest_framework import routers
 
@@ -59,6 +60,7 @@ urlpatterns = [
     path('', events, name='events'),
     path('search_guest_list/', search_guest_list, name='search_guest_list'),
     path('event/add_new/', add_event, name='event_add_new'),
+    path('event/delete/<uuid:record_id>', delete_event, name='delete_event'),
     path('event/<uuid:record_id>/', event, name='event'),
     path('event/<uuid:record_id>/export_attendee/', export_attendee_list, name='export_attendee_list'),
     path('event/<uuid:record_id>/send_reminder/', send_reminder, name='send_reminder_email'),

@@ -12,7 +12,7 @@
         <div class="col-12">
             <nav aria-label="breadcrumb">
                 <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href='/ce/events/' >All Events</a>
+                    <li class="breadcrumb-item"><a href='/cis/events/' >All Events</a>
                     </li>
                     <li class="breadcrumb-item active" aria-current="page">Event</li>
                 </ol>
@@ -36,7 +36,7 @@
                 <li class="nav-item">
                     <a class="nav-link" data-toggle="tab" href="#send_email">Send Email</a>
                 </li>
-                <li class="nav-item d-none">
+                <li class="nav-item">
                     <a class="nav-link" data-toggle="tab" href="#notes">Notes</a>
                 </li>
             </ul>
@@ -151,11 +151,21 @@
                             <div class="">
                                 <div class="">
                                     <div class="">
+                                        <script>
+                                            jQuery(document).ready(function($) {
+                                                $("input.delete").on("click", function() {
+                                                    if(!confirm("Are you sure you want to permanently delete this record and all associated data?"))
+                                                        return;
+                                                    window.location = "{% url 'pd_event:delete_event' record.id%}";
+                                                });
+                                            });
+                                        </script>
                                         {{form.media}}
                                         <form action="" method="post">
                                             {% csrf_token %}
                                             {{ form | crispy }}
-                                            <input type="submit" class="btn btn-primary btn-sm" value="Update">
+                                            <input type="submit" class="btn btn-primary btn-sm" value="Update">&nbsp;
+                                            <input type="button" value="Delete" class="btn btn-danger btn-sm delete float-right pull-right">
                                         </form>
                                     </div>
                                 </div>

@@ -3,6 +3,8 @@ import datetime
 from django import forms
 from django.forms import ModelForm, ValidationError
 
+from django.utils import timezone
+
 from django.template import Context, Template
 from django.template.loader import get_template, render_to_string
 from django.conf import settings
@@ -282,11 +284,12 @@ class EventForm(ModelForm):
                     status__iexact='active'
                 ).order_by('name')
 
-            print('here')
-            print(instance.start_time.strftime('%m/%d/%Y %I:%M %p'))
-            self.fields['start_time'].initial = instance.start_time.strftime('%m/%d/%Y %I:%M %p')
-            self.fields['end_time'].initial = instance.end_time.strftime('%m/%d/%Y %I:%M %p')
-        
+            try:
+                self.fields['start_time'].initial = timezone.localtime(instance.start_time).strftime('%m/%d/%Y %I:%M %p')
+                self.fields['end_time'].initial = timezone.localtime(instance.end_time).strftime('%m/%d/%Y %I:%M %p')
+            except:
+                ...
+
         self.fields['cohorts'].queryset = Cohort.objects.filter(
             status__iexact='active'
         ).order_by('name')
@@ -316,12 +319,28 @@ class EventForm(ModelForm):
             'description': 'This text will appear in the PD letter.'
         }
 
+    def clean_start_time(self):
+        start_time = self.cleaned_data.get('start_time')
+
+        try:
+            start_time = datetime.datetime.strptime(start_time, '%m/%d/%Y %I:%M %p')
+        except:
+            raise ValidationError('Please enter a valid start time')
+
+        return start_time
+
     def clean_end_time(self):
         start_time = self.cleaned_data.get('start_time')
         end_time = self.cleaned_data.get('end_time')
 
+        try:
+            end_time = datetime.datetime.strptime(end_time, '%m/%d/%Y %I:%M %p')
+        except:
+            raise ValidationError('Please enter a valid end time')
+        
         if not end_time:
             return end_time
+        
         if not start_time:
             raise ValidationError('Please enter the start date and time')
 
@@ -339,6 +358,9 @@ class EventForm(ModelForm):
                 str(ch.id) for ch in data.get('cohorts')
             ]
         m.created_by = request.user
+
+        m.start_time = data.get('start_time')
+        m.end_time = data.get('end_time')
 
         if commit:
             m.save()

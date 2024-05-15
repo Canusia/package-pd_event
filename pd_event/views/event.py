@@ -690,9 +690,9 @@ def detail(request, record_id):
                     'list-group-item-success')
                 return redirect('pd_event:event', record_id=record_id)
     
-    # notes = EventNote.objects.filter(
-    #     event=record
-    # )
+    notes = EventNote.objects.filter(
+        event=record
+    )
 
     read_only = False
     if user_has_faculty_role(request.user):
@@ -724,7 +724,7 @@ def detail(request, record_id):
             'urls': urls,
             'read_only': read_only,
             'menu': menu,
-            # 'notes': notes,
+            'notes': notes,
             'record': record
         })
 
@@ -794,6 +794,40 @@ def add_new(request):
             'menu': draw_menu(cis_menu, 'events', 'event_list')
         })
 
+def delete(request, record_id):
+    record = get_object_or_404(Event, pk=record_id)
+
+    try:
+        EventFile.objects.filter(
+            event=record
+        ).delete()
+
+        EventAttendee.objects.filter(
+            event=record
+        ).delete()
+
+        # print(type(record))
+        EventNote.objects.filter(
+            event=record
+        ).delete()
+        
+        record.delete()
+
+        messages.add_message(
+            request,
+            messages.SUCCESS,
+            'Successfully deleted record',
+            'list-group-item-success')
+    except Exception as e:
+        messages.add_message(
+            request,
+            messages.SUCCESS,
+            'There was an error deleting the record. ' + str(e),
+            'list-group-item-success')
+        return redirect("pd_event:event", record_id=record.id)
+
+    return redirect("pd_event:events")
+
 def index(request):
     '''
      search and index page for staff
@@ -802,13 +836,13 @@ def index(request):
         menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event')
         urls = {
             'all_items': 'pd_event_faculty:events',
-            'details_prefix': '/ce/events/event/'
+            'details_prefix': '/cis/events/event/'
         }
     else:
         menu = draw_menu(cis_menu, 'events', 'event_list')
         urls = {
             'add_new': 'pd_event:event_add_new',
-            'details_prefix': '/ce/events/event/',
+            'details_prefix': '/cis/events/event/',
             'all_items': 'pd_event:event'
         }
     template = 'pd_event/event-list.html'
@@ -821,6 +855,6 @@ def index(request):
             'terms': Term.objects.all().order_by('-code'),
             'cohorts': Cohort.objects.all().order_by('name'),
             'event_types': EventType.objects.all().order_by('name'),
-            'api_url': '/ce/events/api/events?format=datatables'
+            'api_url': '/cis/events/api/events?format=datatables'
         }
     )
