@@ -8,3 +8,5 @@ recursive-include pd_event/static *
 recursive-include pd_event/templates *
 recursive-include pd_event/management *
 recursive-include pd_event/migrations *
+recursive-include pd_event/reports *
+recursive-include pd_event/settings *
