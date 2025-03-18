@@ -226,7 +226,7 @@ pd_letter.login_required = False
 def export_attendee_list(request, record_id):
     event = Event.objects.get(id=record_id)
 
-    file_name = 'event-attedee-list.csv'
+    file_name = 'event-attedee-list-' + datetime.datetime.now().strftime('%Y-%m-%d') + '.csv'
 
     response = HttpResponse(content_type='text/csv')
     response['Content-Disposition'] = f'attachment; filename="{file_name}"'
@@ -267,35 +267,16 @@ def export_attendee_list(request, record_id):
         row.append(a.type.replace('_', ' ').title())
 
         if a.type == 'instructor':
-            attendee = Teacher.objects.get(
-                pk=a.meta['id']
-            )
-            row.append(attendee.user.last_name)
-            row.append(attendee.user.first_name)
-            row.append(attendee.user.email)
-            row.append(attendee.user.alt_email)
-            row.append(attendee.user.secondary_email)
-
-        elif a.type == 'faculty':
-            attendee = FacultyCoordinator.objects.get(
-                pk=a.meta['id']
-            )
-            row.append(attendee.user.last_name)
-            row.append(attendee.user.first_name)
-            row.append(attendee.user.email)
-        elif a.type == 'cohort_participant':
-            attendee = CohortParticipant.objects.get(
-                pk=a.meta['id']
-            )
-            row.append(attendee.user.last_name)
-            row.append(attendee.user.first_name)
-            row.append(attendee.user.email)
-        elif a.type == 'highschool':
-            attendee = HighSchool.objects.get(
-                pk=a.meta['id']
-            )
-            row.append(attendee.name)
             
+            row.append(a.course_certificate.teacher_highschool.teacher.user.last_name)
+            row.append(a.course_certificate.teacher_highschool.teacher.user.first_name)
+            row.append(a.course_certificate.teacher_highschool.teacher.user.email)
+            row.append(a.course_certificate.teacher_highschool.teacher.user.alt_email)
+            row.append(a.course_certificate.teacher_highschool.teacher.user.secondary_email)
+            row.append(a.course_certificate.course.name)
+            row.append(a.course_certificate.teacher_highschool.highschool.name)
+            row.append(a.course_certificate.status)
+
         writer.writerow(row)
 
     return response
@@ -357,18 +338,25 @@ def add_attendee(request, record_id):
 
     event = Event.objects.get(id=record_id)
     attendees = request.POST.getlist('attendee', None)
-    attendee_type = request.POST.get('type')
+    attendee_type = 'instructor' # request.POST.get('type', 'instructor')
     attendance_type = request.POST.get('attendance_type')
 
     if not attendees:
         return JsonResponse({
             'status': 'error',
-            'message': 'Please select a record and try again'})
+            'message': 'Please select a record and try again'
+        })
 
     num_added = 0
     mesg = []
     for r in attendees:
         try:
+            if attendee_type == 'instructor':
+                if EventAttendee.objects.filter(
+                    course_certificate__certificate_id=r
+                ).exists():
+                    continue
+
             ea = EventAttendee(
                 event=event
             )
@@ -377,9 +365,14 @@ def add_attendee(request, record_id):
                 'id': str(r)
             }
             
+            if attendee_type == 'instructor':
+                ea.course_certificate = TeacherCourseCertificate.objects.get(
+                    certificate_id=r
+                )
+                
             ea.meta['attendance_type'] = attendance_type
             ea.meta['attendance_status'] = 'N/A'
-            if ea.type == 'instructor' or ea.type == 'cohort_participant' or ea.type == 'faculty':
+            if ea.type in ['instructor', 'cohort_participant', 'faculty']:
                 ea.meta['pd_hour'] = event.pd_hour
             else:
                 ea.meta['participants'] = 0
@@ -483,16 +476,20 @@ def attendees(request, record_id):
         event=record
     )
 
+    print(attendees)
     result = {'data': []}
     for a in attendees:
         name = ''
+        col_2 = ''
+        col_3 = ''
         if a.type == 'instructor':
-            try:
-                attendee = Teacher.objects.get(
-                    pk=a.meta['id']
-                )
-                name = f'{attendee.user.last_name}, {attendee.user.first_name}'
-            except:
+            try:                
+                name = f'{a.course_certificate.teacher_highschool.teacher.user.last_name}, {a.course_certificate.teacher_highschool.teacher.user.first_name}'
+
+                col_2 = f'{a.course_certificate.course.name}'
+                col_3 = f'{a.course_certificate.teacher_highschool.highschool.name}'
+            except Exception as e:
+                print(e)
                 continue
         elif a.type == 'faculty':
             attendee = FacultyCoordinator.objects.get(
@@ -515,6 +512,8 @@ def attendees(request, record_id):
                 'id': a.id,
                 'attendee_type': a.type.replace('_', ' ').title(),
                 'name': name,
+                'col_2': col_2,
+                'col_3': col_3,
                 'attendance_status': a.meta.get('attendance_status', '').title(),
                 'attendance_type': a.meta.get('attendance_type').replace('_', ' ').title(),
                 'pd_hour': a.meta.get('pd_hour'),
@@ -546,7 +545,7 @@ def get_courses(request):
     return JsonResponse(result)
 
 def search_guest_list(request):
-    attendee_type = request.GET.get('attendee_type')
+    attendee_type = request.GET.get('attendee_type', 'instructor')
     cohort = request.GET.getlist('cohort')
     course = request.GET.getlist('course')
     course_status = request.GET.getlist('instructor_course_status')
@@ -607,25 +606,24 @@ def search_guest_list(request):
             })
 
     elif attendee_type == 'instructor':
-        teacher_ids = TeacherCourseCertificate.objects.filter(
+        records = TeacherCourseCertificate.objects.filter(
             course__id__in=course,
             status__in=course_status
         )
         if since:
             since = datetime.datetime.strptime(since, '%m/%d/%Y')
-            teacher_ids = teacher_ids.filter(
+            records = records.filter(
                 since__gte=since
             )
-        teacher_ids = teacher_ids.values_list('teacher_highschool__teacher__id', flat=True)
-
-        records = Teacher.objects.filter(
-            id__in=teacher_ids
-        )
         
         for record in records:
             result['data'].append({
-                'id': record.id,
-                'name': f'{record.user.last_name}, {record.user.first_name}',
+                'id': record.certificate_id,
+                'name': f'{record.teacher_highschool.teacher.user.last_name}, {record.teacher_highschool.teacher.user.first_name}',
+                'col_2': f'{record.teacher_highschool.highschool.name}',
+                'col_3': f'{record.course.name}',
+                'col_4': f'{record.status}',
+                'col_5': f'{record.since}',
                 'attendee_type': attendee_type
             })
 
@@ -714,7 +712,7 @@ def detail(request, record_id):
             'form': form,
             'file_form': file_form,
             'email_after_form': email_after_form,
-            'attendee_form': EventAttendeeFilterForm(),
+            'attendee_form': EventAttendeeFilterForm(event=record),
             'files': record.files(),
             'email_form': email_form,
             'page_title': "Event",
@@ -836,13 +834,13 @@ def index(request):
         menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event')
         urls = {
             'all_items': 'pd_event_faculty:events',
-            'details_prefix': '/cis/events/event/'
+            'details_prefix': '/ce/events/event/'
         }
     else:
         menu = draw_menu(cis_menu, 'events', 'event_list')
         urls = {
             'add_new': 'pd_event:event_add_new',
-            'details_prefix': '/cis/events/event/',
+            'details_prefix': '/ce/events/event/',
             'all_items': 'pd_event:event'
         }
     template = 'pd_event/event-list.html'
@@ -855,6 +853,6 @@ def index(request):
             'terms': Term.objects.all().order_by('-code'),
             'cohorts': Cohort.objects.all().order_by('name'),
             'event_types': EventType.objects.all().order_by('name'),
-            'api_url': '/cis/events/api/events?format=datatables'
+            'api_url': '/ce/events/api/events?format=datatables'
         }
     )

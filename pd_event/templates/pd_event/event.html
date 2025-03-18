@@ -5,7 +5,14 @@
 {% load crispy_forms_tags %}
 
 {% block body %}
+
 <main>
+
+
+  <style>
+    tfoot{display: table-footer-group}
+  </style>
+  
 
     <div class="row">
         
@@ -278,7 +285,7 @@
                                     <table style="width: 100%" class="table table-striped" id="event_attendee_list">
                                         <thead>
                                             <tr>
-                                                <th data-name='id' data-data='id'><input style='height: 13px;' type="checkbox" class="form-control toggle-button"
+                                                <th data-name='id' data-data='id'><input style='height: 13px;' type="checkbox" class="toggle-button"
                                                     name="select-all" id="select-all" /></th>
                                                 <th data-name='name' data-data='name'>Name</th>
                                                 <th data-name='attendee_type' data-data='attendee_type'>
@@ -331,7 +338,7 @@
                                                 <thead>
                                                     <tr>
                                                         <th data-name='id' data-data='id'>
-                                                            <input style='height: 13px;' type="checkbox" class="toggle-button"
+                                                            <input style='height: 13px;' type="checkbox" class="toggle-button "
                                                                 name="select-all" id="select-all" />
                                                         </th>
                                                         <th data-name='name' data-data='name'>Name</th>
@@ -417,7 +424,15 @@
                                                                                     'searchable': false,
                                                                                     'orderable': false,
                                                                                     'render': function (data, type, row, meta) {
-                                                                                        return row.name
+   let col = row.name
+   if(row.col_2 !== null) {
+    col += "<br><small>" + row.col_2 + "</small>"
+   }
+
+   if(row.col_3 !== null) {
+    col += "<br><small>" + row.col_3 + "</small>"
+   }
+   return col
                                                                                     }
                                                                                 },
                                                                                 {
@@ -488,7 +503,15 @@
                                                                                 'searchable': false,
                                                                                 'orderable': false,
                                                                                 'render': function (data, type, row, meta) {
-                                                                                    return row.name
+                                                                                    let col = row.name
+   if(row.col_2 !== null) {
+    col += "<br><small>" + row.col_2 + "</small>"
+   }
+
+   if(row.col_3 !== null) {
+    col += "<br><small>" + row.col_3 + "</small>"
+   }
+   return col
                                                                                 }
                                                                             },
                                                                             {
@@ -636,20 +659,10 @@
                                                                         $(instructor_course_status).attr('multiple', 'multiple')
 
                                                                         function get_guest_results() {
-                                                                            let attendee_type = $('#id_attendee_type')
-                                                                            let cohort = $('#id_cohort')
                                                                             let course = $('#id_course')
                                                                             let instructor_course_status = $("#id_instructor_course_status")
                                                                             let campus_code = ""
-
-                                                                            if ($(attendee_type).val() == '') {
-                                                                                swal(
-                                                                                    "Error",
-                                                                                    "Please select attendee type and try again.",
-                                                                                    "error")
-                                                                                $(subject).focus()
-                                                                                return false;
-                                                                            }
+                                                                            
                                                                             table.destroy();
 
                                                                             $.blockUI();
@@ -683,9 +696,28 @@
                                                                                         }
                                                                                     },
                                                                                     {
-                                                                                        'width': '50%',
                                                                                         'render': function (data, type, row, meta) {
                                                                                             return row.name
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        'render': function (data, type, row, meta) {
+                                                                                            return row.col_2
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        'render': function (data, type, row, meta) {
+                                                                                            return row.col_3
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        'render': function (data, type, row, meta) {
+                                                                                            return row.col_4
+                                                                                        }
+                                                                                    },
+                                                                                    {
+                                                                                        'render': function (data, type, row, meta) {
+                                                                                            return row.col_5
                                                                                         }
                                                                                     }
                                                                                 ]
@@ -725,6 +757,8 @@
                                                                                         response.message,
                                                                                         "warning")
                                                                                 }
+
+                                                                                $("input[name='attendee']").prop("checked", false);
 
                                                                                 get_event_guests()
                                                                                 get_event_attendees()
@@ -865,10 +899,18 @@
                                                                                 <thead>
                                                                                     <tr>
                                                                                         <th data-name='id' data-data='id'>
-                                                                                            <input style='height: 13px;' type="checkbox" class="form-control toggle-button"
+                                                                                            <input style='height: 13px;' type="checkbox" class="toggle-button"
                                                                                                 name="select-all" id="select-all" />
                                                                                         </th>
                                                                                         <th data-name='name' data-data='name'>Name
+                                                                                        </th>
+                                                                                        <th data-name='col_2' data-data='col_2'>High School
+                                                                                        </th>
+                                                                                        <th data-name='col_3' data-data='col_3'>Course
+                                                                                        </th>
+                                                                                        <th data-name='col_4' data-data='col_4'>Status
+                                                                                        </th>
+                                                                                        <th data-name='col_5' data-data='col_5'>Since
                                                                                         </th>
                                                                                     </tr>
                                                                                 </thead>

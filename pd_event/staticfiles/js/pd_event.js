@@ -9,5 +9,8 @@ jQuery(document).ready(function($) {
             pattern: /[M]/, optional: true
             }
         }
-    });    
+    });   
+    $('select[multiple]').multipleSelect({
+        filter: true
+    });
 });

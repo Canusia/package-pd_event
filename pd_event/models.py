@@ -47,6 +47,8 @@ class Event(models.Model):
     )
     # venue = models.ForeignKey("cis.Venue", on_delete=models.PROTECT)
 
+    courses = models.ManyToManyField('cis.Course')
+
     start_time = models.DateTimeField(
         verbose_name="Start Date & Time",
         blank=True,
@@ -287,6 +289,13 @@ class EventAttendee(models.Model):
         on_delete=models.CASCADE
     )
 
+    course_certificate = models.ForeignKey(
+        'cis.TeacherCourseCertificate',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True
+    )
+
     ATTENDEE_TYPE = [
         ('instructor', 'Instructor'),
         # ('highschool_admin', 'High School Personnel'),
@@ -296,8 +305,10 @@ class EventAttendee(models.Model):
     ]
     type = models.CharField(
         choices=ATTENDEE_TYPE,
-        max_length=50
+        max_length=50,
+        default='instructor'
     )
+    
     meta = JSONField(
         blank=True,
         null=True

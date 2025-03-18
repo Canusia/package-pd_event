@@ -165,24 +165,17 @@ class EventEmailForm(forms.Form):
     
 
 class EventAttendeeFilterForm(forms.Form):
-    attendee_type = forms.ChoiceField(
-        choices=EventAttendee.ATTENDEE_TYPE
-    )
-
-    cohort = forms.MultipleChoiceField(
-        choices=[],
-        required=False,
-        label='Subjects'
-    )
     
     course = forms.ModelMultipleChoiceField(
         queryset=None,
-        required=False
+        required=True,
+        label='Course(s)'
     )
 
     instructor_course_status = forms.ChoiceField(
         choices=TeacherCourseCertificate.STATUS_OPTIONS,
-        required=False
+        required=False,
+        label='Instructor Course Status'
     )
 
     since = forms.DateField(
@@ -196,31 +189,11 @@ class EventAttendeeFilterForm(forms.Form):
         )
     )
     
-    fac_assistant = forms.MultipleChoiceField(
-        choices=FacultyCoordinator.ASST_OPTIONS,
-        required=False,
-        widget=forms.HiddenInput,
-        label='Faculty Type'
-    )
-
-    def __init__(self, *args, **kwargs):
+    def __init__(self, event, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        cohort_choices = []
-        for cohort in Cohort.objects.filter(status__iexact='active').order_by('name'):
-            if False:
-                cohort_choices.append(
-                    (cohort.id, cohort.name + ' (Requires off-year PD)')
-                )
-            else:
-                cohort_choices.append(
-                    (cohort.id, cohort.name)
-                )
-
-        self.fields['cohort'].choices = cohort_choices
-        self.fields['course'].queryset = Course.objects.filter(
-            status__iexact='active'
-        ).order_by('cohort__designator')
+        self.fields['course'].queryset = event.courses.all().order_by('name')
+        self.fields['course'].initial = event.courses.all()
 
 class EventFileForm(ModelForm):
     class Meta:
@@ -243,10 +216,10 @@ class EventFileForm(ModelForm):
         self.fields['event'].initial = event.id
 
 class EventForm(ModelForm):
-    cohorts = forms.ModelMultipleChoiceField(
+    courses = forms.ModelMultipleChoiceField(
         queryset=None,
         required=False,
-        label='Subject(s)'
+        label='Course(s)'
     )
 
     action = forms.CharField(
@@ -254,14 +227,12 @@ class EventForm(ModelForm):
     )
 
     start_time = forms.CharField(
-        # input_formats=['%m/%d/%Y %I:%M %p'],
         label='Start Date/Time',
         help_text='Eg: 10/10/2020 01:30 PM',
         widget=forms.TextInput(attrs={'class':'col-md-6 col-sm-12 datetime_picker'}),
     )
 
     end_time = forms.CharField(
-        # input_formats=['%m/%d/%Y %I:%M %p'],
         label='End Date/Time',
         help_text='Eg: 10/10/2020 01:30 PM',
         widget=forms.TextInput(attrs={'class':'col-md-6 col-sm-12 datetime_picker'}),
@@ -277,20 +248,14 @@ class EventForm(ModelForm):
 
         super().__init__(*args, **kwargs)       
         
-        if instance:
-            if instance.cohort:
-                self.fields['cohorts'].initial = Cohort.objects.filter(
-                    id__in=instance.cohort,
-                    status__iexact='active'
-                ).order_by('name')
-
+        if instance:            
             try:
                 self.fields['start_time'].initial = timezone.localtime(instance.start_time).strftime('%m/%d/%Y %I:%M %p')
                 self.fields['end_time'].initial = timezone.localtime(instance.end_time).strftime('%m/%d/%Y %I:%M %p')
             except:
                 ...
 
-        self.fields['cohorts'].queryset = Cohort.objects.filter(
+        self.fields['courses'].queryset = Course.objects.filter(
             status__iexact='active'
         ).order_by('name')
             
@@ -299,7 +264,7 @@ class EventForm(ModelForm):
     class Meta:
         model = Event
         fields = [
-            'cohorts',
+            'courses',
             'event_type',
             'term',
             'delivery_mode',
@@ -350,21 +315,20 @@ class EventForm(ModelForm):
         return end_time
 
     def save(self, commit=True, request=None, *args, **kwargs):
-        m = super().save(commit=False, *args, **kwargs)
+        record = super().save(commit=False, *args, **kwargs)
 
         data = self.cleaned_data
-        if data.get('cohorts'):
-            m.cohort = [
-                str(ch.id) for ch in data.get('cohorts')
-            ]
-        m.created_by = request.user
+        record.created_by = request.user
 
-        m.start_time = data.get('start_time')
-        m.end_time = data.get('end_time')
+        record.start_time = data.get('start_time')
+        record.end_time = data.get('end_time')
 
-        if commit:
-            m.save()
-        return m
+        record.save()
+
+        for course in data.get('courses'):
+            record.courses.add(course)
+
+        return record
 
 class EventTypeForm(ModelForm):
     class Meta:
