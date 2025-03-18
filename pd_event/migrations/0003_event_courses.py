@@ -6,7 +6,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cis', '0019_alter_classsection_co_reqs_alter_customuser_email_and_more'),
+        # ('cis', '0019_alter_classsection_co_reqs_alter_customuser_email_and_more'),
         ('pd_event', '0002_event_meta_alter_event_cohort'),
     ]
 
