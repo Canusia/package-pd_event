@@ -5,6 +5,7 @@ from django.http import HttpResponse
 
 from django.utils import timezone
 from django.db import models
+
 from django.conf import settings
 from django.contrib.auth.models import Group
 from django.db.models import JSONField
@@ -47,8 +48,18 @@ class Event(models.Model):
     )
     # venue = models.ForeignKey("cis.Venue", on_delete=models.PROTECT)
 
+    def __str__(self):
+        courses = ','.join([course.name for course in self.courses.all()])
+
+        return f"{self.term.label} - {self.event_type.name} - ({courses})"
+    
     courses = models.ManyToManyField('cis.Course')
 
+    @property
+    def sexy_courses(self):
+        courses = ','.join([course.name for course in self.courses.all()])
+        return courses
+    
     start_time = models.DateTimeField(
         verbose_name="Start Date & Time",
         blank=True,
