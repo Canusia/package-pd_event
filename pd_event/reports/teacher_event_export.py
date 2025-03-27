@@ -140,7 +140,7 @@ class teacher_event_export(forms.Form):
             )
         
         final_records = [] 
-        file_name = "events-attendance-"  + str(datetime.datetime.now()) + ".csv"
+        file_name = "events-attendance-"  + datetime.datetime.now().strftime('%m_%d_%Y') + ".csv"
 
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{file_name}"'
