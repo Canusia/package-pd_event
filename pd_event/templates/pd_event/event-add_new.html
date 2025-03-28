@@ -53,7 +53,7 @@
                         
                         {{form.media}}
 
-                        <form action="" id="form_college_add_new" method="post">
+                        <form action="" id="form_college_add_new" method="post" class="frm_ajax">
                             {% csrf_token %}
 
                             {{ form | crispy }}

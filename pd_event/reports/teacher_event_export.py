@@ -17,7 +17,7 @@ from django.forms import ValidationError
 from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Submit
 
-from pd_event.models import Event, EventType, EventAttendee
+from ..models import Event, EventType, EventAttendee
 
 from cis.utils import user_has_cis_role
 
@@ -42,11 +42,10 @@ class teacher_event_export(forms.Form):
         label='Term(s)'
     )
 
-    cohort = forms.ModelChoiceField(
+    course = forms.ModelMultipleChoiceField(
         queryset=None,
-        label='Event Subject',
-        required=False,
-        help_text='If not selected, all subjects are included.'
+        label='Course(s)',
+        required=True
     )
 
     course_cert_status = forms.MultipleChoiceField(
@@ -97,17 +96,15 @@ class teacher_event_export(forms.Form):
         self.fields['event_type'].queryset = EventType.objects.all().order_by('name')
         self.fields['term'].queryset = Term.objects.all().order_by('-code')
 
-        self.fields['cohort'].queryset = Cohort.objects.filter(
-            status__iexact='active'
-        ).order_by('name')
+        self.fields['course'].queryset = Course.objects.all().order_by('name')
 
     def run(self, task, data):
-        cohort = data.get('cohort')[0]
         term = data.get('term')
 
         records = EventAttendee.objects.filter(
             event__event_type__in=data.get('event_type'),
-            event__term__id__in=term
+            event__term__id__in=term,
+            event__courses__id__in=data.get('course')
         )
 
         teachers = None
@@ -115,11 +112,6 @@ class teacher_event_export(forms.Form):
             teachers = TeacherCourseCertificate.objects.filter(
                 status__in=data.get('course_cert_status')
             ).values_list('teacher_highschool__teacher__user__psid', flat=True)
-
-        if cohort:
-            records = records.filter(
-                event__cohort__contains=str(cohort)
-            )
 
         if data.get('started_on')[0]:
             started_on = datetime.datetime.strptime(
@@ -157,51 +149,43 @@ class teacher_event_export(forms.Form):
             'Last Name',
             'EMPLID',
             'Email',
-            'High School(s)',
+            'Secondary Email',
+            'High School',
             'Attendance Type',
-            'Attendee Type',
             'Attendance Status',           
             'PD Hours',
-            'Total PD Hours',
             'PD Note',
             'Event Type',
             'Event Start Date/Time',
             'Event End Date/Time',
-            'Event Cohorts'
+            'Event Course(s)'
         ])
 
         if records:
             for record in records:                
                 row = []
-                attendee_info = record.get_info()
+                
+                row.append(record.course_certificate.teacher_highschool.teacher.user.first_name)
+                row.append(record.course_certificate.teacher_highschool.teacher.user.last_name)
+                row.append(record.course_certificate.teacher_highschool.teacher.user.psid)
+                row.append(record.course_certificate.teacher_highschool.teacher.user.email)
+                row.append(record.course_certificate.teacher_highschool.teacher.user.secondary_email)
+                
+                row.append(record.course_certificate.teacher_highschool.highschool.name if record.course_certificate.teacher_highschool.highschool else 'Not Available')  # High School Name
 
-                if teachers:
-                    if not attendee_info.get('emplid') in teachers:
-                        continue
-
-                row.append(attendee_info.get('first_name'))
-                row.append(attendee_info.get('last_name'))
-                row.append(attendee_info.get('emplid'))
-                row.append(attendee_info.get('secondary_email'))
-
-                try:
-                    row.append(attendee_info.get('attendee').active_highschools)
-                except:
-                    row.append('')
-
+                # Filter by teacher course certificate status
                 row.append(record.meta.get('attendance_type'))
-                row.append(record.type)
                 row.append(record.meta.get('attendance_status'))
                 
                 row.append(record.meta.get('pd_hour'))
-                row.append(record.event.pd_hour)
                 
-                row.append(record.meta.get('note'))
+                row.append(record.meta.get('note', ' '))
 
                 row.append(record.event.event_type)
                 row.append(record.event.start_time_local.strftime('%m/%d/%Y %I:%M %p'))
                 row.append(record.event.end_time_local.strftime('%m/%d/%Y %I:%M %p'))
-                row.append(record.event.cohorts)
+
+                row.append(','.join(record.event.course_list))
 
                 writer.writerow(row)
 

@@ -35,6 +35,7 @@ class EventEmailForm(forms.Form):
     )
 
     email_to = forms.ChoiceField(
+        label='Send Email To',
         choices=[
             # ('to_all_guests', 'All Guests'),
             ('to_all', 'All Guests'),
@@ -74,6 +75,13 @@ class EventEmailForm(forms.Form):
         validators=[validate_html_short_code]
     )
 
+    copy_me = forms.BooleanField(
+        required=False,
+        label='Send Me a Copy',
+        help_text='If checked, a copy of the email will be sent to your email address.',
+        initial=False
+    )
+
     def __init__(self, event, email_type='send_email_to_guests', *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -89,7 +97,7 @@ class EventEmailForm(forms.Form):
     def save(self, request, event):
         data = self.cleaned_data
 
-        from pd_event.models import EventAttendee
+        from .models import EventAttendee
 
         if data.get('email_to') == 'to_attendees':
             attendees = event.marked_as_attended
@@ -97,7 +105,6 @@ class EventEmailForm(forms.Form):
             attendees = event.marked_as_not_attended
         else:
             attendees = event.event_guests
-
 
         to_list = []
         for attendee in attendees:
@@ -154,7 +161,45 @@ class EventEmailForm(forms.Form):
                 text_body,
                 html_body,
                 settings.DEFAULT_FROM_EMAIL,
-                to
+                to,
+                headers={
+                    'Reply-To': request.user.email
+                }
+            )
+
+        if data.get('copy_me', False):
+
+            message = Template(data.get('message', ''))
+            subject = Template(data.get('subject', ''))
+
+            attendee_info = attendee.get_info()
+            context = Context({
+                # 'attendee_first_name' : attendee_info.get('first_name'),
+                # 'attendee_last_name' : attendee_info.get('last_name'),
+                'event_term' : str(event.term),
+                'event_start_date_time' : event.start_time_local.strftime('%m/%d/%Y %I:%m %p'),
+                'event_end_date_time' : event.end_time_local.strftime('%m/%d/%Y %I:%m %p'),
+                'description' : event.description,
+                # 'pd_letter_url' : attendee.pd_url,  
+                # 'pd_note' : attendee.meta.get('note'),
+            })
+
+            text_body = message.render(context)
+            text_body += "\n\n" + "Sent this email to " + ', '.join(to_list)
+            
+            template = get_template('cis/email.html')
+            html_body = template.render({
+                'message': text_body
+            })
+
+            subject = message.render(context)
+
+            send_html_mail(
+                subject,
+                text_body,
+                html_body,
+                settings.DEFAULT_FROM_EMAIL,
+                [request.user.email]
             )
         
         event.add_note(
@@ -172,10 +217,11 @@ class EventAttendeeFilterForm(forms.Form):
         label='Course(s)'
     )
 
-    instructor_course_status = forms.ChoiceField(
+    instructor_course_status = forms.MultipleChoiceField(
         choices=TeacherCourseCertificate.STATUS_OPTIONS,
         required=False,
-        label='Instructor Course Status'
+        label='Instructor Course Status',
+        widget=forms.CheckboxSelectMultiple
     )
 
     since = forms.DateField(
@@ -240,7 +286,8 @@ class EventForm(ModelForm):
 
     class Media:
         js = [
-            'js/pd_event.js'
+            'js/pd_event.js',
+            'js/pd_events.js'
         ]
 
     def __init__(self, *args, **kwargs):

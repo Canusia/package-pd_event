@@ -32,17 +32,10 @@ class EventSerializer(serializers.ModelSerializer):
         format='%m/%d/%Y %H:%M'
     )
 
-    cohorts = serializers.SerializerMethodField()
+    course_list = serializers.ListField()
 
     class Meta:
         model = Event
         fields = '__all__'
 
-    def get_cohorts(self, obj):
-        if obj.cohort:
-            cohorts = Cohort.objects.filter(
-                id__in=obj.cohort
-            ).order_by('name')
 
-            return '<br>'.join(cohort.name for cohort in cohorts)
-        return 'N/A'

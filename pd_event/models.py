@@ -48,18 +48,8 @@ class Event(models.Model):
     )
     # venue = models.ForeignKey("cis.Venue", on_delete=models.PROTECT)
 
-    def __str__(self):
-        courses = ','.join([course.name for course in self.courses.all()])
-
-        return f"{self.term.label} - {self.event_type.name} - ({courses})"
-    
     courses = models.ManyToManyField('cis.Course')
 
-    @property
-    def sexy_courses(self):
-        courses = ','.join([course.name for course in self.courses.all()])
-        return courses
-    
     start_time = models.DateTimeField(
         verbose_name="Start Date & Time",
         blank=True,
@@ -119,6 +109,16 @@ class Event(models.Model):
         null=True
     )
 
+    @property
+    def sexy_courses(self):
+        courses = ','.join([course.name for course in self.courses.all()])
+        return courses
+    
+    def __str__(self):
+        courses = ','.join([course.name for course in self.courses.all()])
+
+        return f"{self.term.label} - {self.event_type.name} - ({courses})"
+    
     def add_note(self, createdby=None, note='', meta=None):
 
         if not createdby:
@@ -142,6 +142,12 @@ class Event(models.Model):
 
         return note
 
+    @property
+    def ce_url(self):
+        return reverse_lazy('pd_event:event', kwargs={
+            'record_id': self.id
+        })
+    
     @property
     def start_time_local(self):
         return timezone.localtime(self.start_time)
@@ -171,6 +177,10 @@ class Event(models.Model):
                 'attendees': records
             })
 
+    @property
+    def course_list(self):
+        return [course.name for course in self.courses.all().order_by('name')]
+    
     @property
     def cohorts(self):
         if self.cohort:

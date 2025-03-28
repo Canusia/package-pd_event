@@ -2,6 +2,12 @@ import logging, datetime
 from operator import or_
 from functools import reduce
 
+import csv
+from django.http import HttpResponse
+
+from django.utils import timezone
+from cis.utils import get_field
+
 from django import forms
 from django.db.models import Q
 
@@ -12,7 +18,7 @@ from crispy_forms.helper import FormHelper
 from crispy_forms.layout import Submit
 from django.core.files.base import ContentFile, File
 
-from pd_event.models import Event, EventType
+from ..models import Event, EventType
 
 from cis.utils import export_to_excel
 
@@ -36,10 +42,10 @@ class pd_events(forms.Form):
         required=True
     )
 
-    cohort = forms.ModelMultipleChoiceField(
+    course = forms.ModelMultipleChoiceField(
         queryset=None,
-        label='Subject(s)',
-        required=False
+        label='Course(s)',
+        required=True
     )
 
     started_on = forms.DateField(
@@ -80,45 +86,37 @@ class pd_events(forms.Form):
             
         self.helper.add_input(Submit('submit', 'Generate Export'))
 
-        self.fields['cohort'].queryset = Cohort.objects.all().order_by('name')
+        self.fields['course'].queryset = Course.objects.all().order_by('name')
         self.fields['event_type'].queryset = EventType.objects.all().order_by('name')
 
     def run(self, task, data):
         cohorts = data.get('cohort')
         
         records = Event.objects.filter(
-            event_type__in=data.get('event_type')
+            event_type__in=data.get('event_type'),
+            courses__id__in=data.get('course')
         )
 
-        if cohorts and data.get('cohort')[0]:
-            cohort_qry = reduce(
-                or_, [
-                    Q(cohort__contains=str(ch)) for ch in cohorts
-                ])
-            records = records.filter(
-                cohort_qry
-            )
-
+        print(data)
         if data.get('started_on')[0]:
             records = records.filter(
-                start_time__gte=data.get('started_on')[0]
+                start_time__gte=datetime.datetime.strptime(
+                    data.get('started_on')[0],
+                    '%m/%d/%Y'
+                )  # Convert string to datetime object
             )
 
         if data.get('started_until')[0]:
             records = records.filter(
-                start_time__lte=data.get('started_until')[0]
+                start_time__lte=datetime.datetime.strptime(
+                    data.get('started_until')[0],
+                    '%m/%d/%Y'
+                )  # Convert string to datetime object
             )
         
-        from datetime import datetime
-        import csv
-        from django.http import HttpResponse
-
-        from django.utils import timezone
-        from cis.utils import get_field
-
         final_records = []
 
-        file_name = "events-export-" + str(datetime.now()) + ".csv"
+        file_name = "events-export-" + str(datetime.datetime.now().strftime('%m_%d_%Y')) + ".csv"
 
         response = HttpResponse(content_type='text/csv')
         response['Content-Disposition'] = f'attachment; filename="{file_name}"'
@@ -130,7 +128,7 @@ class pd_events(forms.Form):
             'Created By',
             'Start Date/Time',
             'End Date/Time',
-            'Cohort(s)',
+            'Course(s)',
             'Term',
             'PD Hours',
             'Descriptions',
@@ -151,7 +149,7 @@ class pd_events(forms.Form):
 
                 row.append(timezone.localtime(record.start_time).strftime('%m/%d/%Y %I:%M %p'))
                 row.append(timezone.localtime(record.end_time).strftime('%m/%d/%Y %I:%M %p'))
-                row.append(record.cohorts)
+                row.append(','.join(record.course_list))
                 row.append(record.term)
                 row.append(record.pd_hour)
                 row.append(record.description)
@@ -162,20 +160,9 @@ class pd_events(forms.Form):
                 row.append(record.num_attendees)
                 row.append(record.num_not_attended)
 
-                # row.append(record.num_attachments)
-
-                # try:
-                #     total_pd += float(record.pd_hour)
-                # except:
-                #     pass
-
                 writer.writerow(row)
 
-            # writer.writerow([
-            #     '', '', '', '', '', total_pd
-            # ])
-
-        path = "reports/" + str(datetime.now().strftime('%Y')) + "/" + str(task.id) + "/" + file_name
+        path = "reports/" + str(datetime.datetime.now().strftime('%Y')) + "/" + str(task.id) + "/" + file_name
         media_storage = PrivateMediaStorage()
 
         path = media_storage.save(path, ContentFile(response.getvalue()))

@@ -49,9 +49,9 @@
                                                     <div class="form-row">
                                                         <div class="col">
                                                             <div class="float-right">
-                                                                <select class="form-control mt-2" name="cohort">
-                                                                    <option value="">By Subject</option>
-                                                                    {% for c in cohorts %}
+                                                                <select class="form-control mt-2" name="course">
+                                                                    <option value="">By Course</option>
+                                                                    {% for c in courses %}
                                                                     <option value="{{c.id}}">{{c.name}}</option>
                                                                     {% endfor %}
                                                                 </select>&nbsp;
@@ -95,10 +95,10 @@
                                     style="width:100%" data-server-side="true" data-ajax="{{api_url}}">
                                     <thead>
                                         <tr>
-                                            <th data-data="cohorts" searchable="1" data-name="cohorts">Cohorts</th>
+                                            <th data-data="course_list" searchable="1" data-name="courses.name">Courses</th>
                                             <th data-data="event_type.name" searchable="1" data-name="event_type.name">
                                                 Type</th>
-                                            <th data-data="term.code" searchable="1" data-name="term.code">Term
+                                            <th data-data="term.label" searchable="1" data-name="term.label">Term
                                             </th>
                                             <th data-data="start_time" searchable="1" data-name="start_time">Start Date/Time
                                             </th>
@@ -106,6 +106,14 @@
                                             <th data-data="id" data-name='id'><span class="sr-only">Actions</span></th>
                                         </tr>
                                     </thead>
+                                    <tfoot>
+                                        <th>Course</th>
+                                        <th>Type</th>
+                                        <th>Term</th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                    </tfoot>
                                 </table>
                             </div>
                         </div>
@@ -142,7 +150,48 @@
                                 "fnDrawCallback": function( oSettings ) {
                                     $.unblockUI();
                                 },
+                                initComplete: function () {
+                                    this.api()
+                                        .columns()
+                                        .every(function () {
+                                            let column = this;
+                                            let title = column.footer().textContent;
+                            
+                                            // Create input element
+                                            if(title != '') {
+                                                let input = document.createElement('input');
+                                                input.className = 'form-control'
+                                                input.placeholder = "Search " + title;
+
+                                                column.footer().replaceChildren(input);
+                                
+                                                // Event listener for user input
+                                                input
+                                                .addEventListener('keyup', $.debounce(1500,() => {
+                                                    if (column.search() !== this.value) {
+                                                        column.search(input.value).draw();
+                                                    }
+                                                }));
+                                            }
+                                        });
+
+
+                                    // Restore state
+                                    var state = this.api().state.loaded();
+                                    if (state) {
+                                        this.api().columns().eq(0).each(function (colIdx) {
+                                            var colSearch = state.columns[colIdx].search;
+                                            console.log(colSearch)
+
+                                            if (colSearch.search) {
+                                                $('input', this.column(colIdx).footer()).val(colSearch.search);
+                                            }
+                                        });
+                                    }
+                                },
                                 dom: 'B<"float-left mt-3 mb-3"l><"float-right mt-3"f><"row clear">rt<"row"<"col-6"i><"col-6 float-right"p>>',
+
+                                searchDelay: 1500,
                                 buttons: [
                                     {
                                         extend: 'csv', className: 'btn btn-sm btn-primary text-white text-light',
@@ -163,10 +212,10 @@
                                 'lengthMenu': [30, 50, 100],
                                 'columns': [
                                     {
-                                        'searchable': false,
-                                        'orderable': false,
+                                        // 'searchable': false,
+                                        // 'orderable': false,
                                         'render': function (data, type, row, meta) {
-                                            return row.cohorts
+                                            return row.course_list
                                         }
                                     },
                                     null,

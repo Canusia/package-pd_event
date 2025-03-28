@@ -48,76 +48,6 @@
                 </li>
             </ul>
 
-            <script>
-                jQuery(document).ready(function($) {
-
-                    $('form.frm_ajax').submit(function(event) {
-
-                        var blocked_element = $(this).parent()
-                        $(blocked_element).block();
-                        event.preventDefault()
-
-                        form = $(this)
-
-                        if($("input, select, textarea").hasClass('is-invalid'))
-                            $("input, select, textarea").removeClass('is-invalid')
-                        
-                        if($("input, select, textarea").next('p').length) 
-                            $("input, select, textarea").nextAll('p').empty();
-
-                        let action = $(form).attr('action')
-                        let first_element = '';
-                        
-                        $.post({
-                            url: action,
-                            data: $(form).serialize(),
-                            error: function(xhr, status, error) {
-
-                                let errors = $.parseJSON(xhr.responseJSON.errors);
-                                
-                                for (var name in errors) {
-                                    for (var i in errors[name]) {
-                                        var $input = $("[name='"+ name +"']");
-                                        $input.addClass('is-invalid');
-
-                                        $input.after("<p class='invalid-feedback'><strong class=''>" + errors[name][i].message + "</strong></p>");
-                                    }
-
-                                    if(first_element == '')
-                                        $input.focus()
-                                    else {
-                                        first_element = '-'
-                                    }
-                                }
-
-                                var span = document.createElement('span')
-                                span.innerHTML = xhr.responseJSON.message
-                                swal({
-                                    title: xhr.responseJSON.message,
-                                    content: span,
-                                    icon: 'warning'
-                                });
-
-                                $(blocked_element).unblock();
-                            },
-                            success: function(response) {
-                                swal({
-                                    title: 'Success',
-                                    text: response.message,
-                                    icon: response.status
-                                }).then(
-                                    (value) => {
-                                        if(response.action == 'reload')
-                                            location.reload();
-                                    }
-                                )
-                                $(blocked_element).unblock();
-                            }
-                        })
-                        return false
-                    });
-                });
-            </script>
 
             {% if messages %}
             <ul class="messages list-group m-2">
@@ -143,7 +73,7 @@
                         <div class="col-12 p-3 mb-3">
 
             {{email_after_form.media}}
-            <form method="post" class="frm_ajax" action="{% url 'pd_event:event' record.id %}" enctype="multipart/form-data">
+            <form method="post" class="frm_ajax" id="frm_event_email" action="{% url 'pd_event:event' record.id %}" enctype="multipart/form-data">
                 {% csrf_token %}
                 {{ email_after_form | crispy }}
                 <input type="submit" class="btn btn-primary btn-sm" value="Send Email">
@@ -194,7 +124,7 @@
                                                 class="fa fas-light fa-plus-circle"></i>&nbsp;Add New Note</a>
                                     </div>
                                     <div class="clearfix">&nbsp;</div>
-                                    <div class="table-responsive">
+                                    <div class="">
                                         <table class="table table-striped">
                                             <thead>
                                                 <tr>
@@ -328,12 +258,12 @@
 
                 <div class="tab-pane" id="guest_list">
                     <div class="bg-white border border-top-0">
-                        <div class="col-12 pt-3 mb-3">
-                            <div class="">
+                        <div class="row">
+                            <div class="col-12 pt-3 mb-3">
                                 <div class="">
                                     <form action="" method="post">
                                         {% csrf_token %}
-                                        <div class="table-responsive">
+                                        <div class="">
                                             <table style="width: 100%" class="table table-striped" id="tbl_event_guests">
                                                 <thead>
                                                     <tr>
@@ -555,7 +485,9 @@
                                                                                         response.message,
                                                                                         "warning")
                                                                                 }
-
+                                                                                
+                                                                                // Clear the checkboxes
+                                                                                $("input[name='select-all']").prop("checked", false);
                                                                                 get_event_guests()
                                                                                 get_event_attendees()
                                                                             }
@@ -759,6 +691,7 @@
                                                                                 }
 
                                                                                 $("input[name='attendee']").prop("checked", false);
+                                                                                $("input[name='select-all']").prop("checked", false);
 
                                                                                 get_event_guests()
                                                                                 get_event_attendees()
@@ -857,6 +790,7 @@
                                                                                         "warning")
                                                                                 }
 
+                                                                                $("input[name='select-all']").prop("checked", false);
                                                                                 get_event_attendees()
                                                                             }
                                                                         })
@@ -893,7 +827,7 @@
                                                                 <div id="guest_list_results_container" class=" mt-4 d-none">
                                                                     <form action="" method="post">
                                                                         {% csrf_token %}
-                                                                        <div class="table-responsive">
+                                                                        <div class="">
                                                                             <table class="table dataTable table-striped"
                                                                                 id="guest_list_results">
                                                                                 <thead>
@@ -919,13 +853,13 @@
                                                                                     <tr>
                                                                                         <td colspan="2">
                                                                                             <input type="button"
-                                                                                                class="btn btn-primary btn_apply_for_selected"
+                                                                                                class="btn btn-sm btn-primary btn_apply_for_selected"
                                                                                                 id="btn_apply_for_required"
                                                                                                 value="Add as Required"
                                                                                                 data-attendance='required'
                                                                                                 name="apply_for_selected">
                                                                                             &nbsp;<input type="button"
-                                                                                                class="btn btn-primary btn_apply_for_selected"
+                                                                                                class="btn btn-sm btn-info btn_apply_for_selected"
                                                                                                 id="btn_apply_for_optional"
                                                                                                 data-attendance='optional'
                                                                                                 value="Add as Optional"

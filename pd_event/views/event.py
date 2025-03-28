@@ -61,9 +61,9 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                 event_type__id=self.request.GET.get('event_type')
             )
 
-        if self.request.GET.get('cohort'):
+        if self.request.GET.get('course'):
             records = records.filter(
-                cohort__contains=self.request.GET.get('cohort')
+                courses__id=self.request.GET.get('course')
             )
         
         if self.request.GET.get('start_time'):
@@ -334,7 +334,8 @@ def add_attendee(request, record_id):
     if not request.user.is_authenticated:
         return JsonResponse({
             'status': 'error',
-            'message': 'Please login to continue'})
+            'message': 'Please login to continue'
+        })
 
     event = Event.objects.get(id=record_id)
     attendees = request.POST.getlist('attendee', None)
@@ -350,11 +351,14 @@ def add_attendee(request, record_id):
     num_added = 0
     mesg = []
     for r in attendees:
+
         try:
             if attendee_type == 'instructor':
                 if EventAttendee.objects.filter(
-                    course_certificate__certificate_id=r
+                    course_certificate__certificate_id=r,
+                    event=event
                 ).exists():
+                    print('2')
                     continue
 
             ea = EventAttendee(
@@ -476,7 +480,6 @@ def attendees(request, record_id):
         event=record
     )
 
-    print(attendees)
     result = {'data': []}
     for a in attendees:
         name = ''
@@ -741,34 +744,18 @@ def add_new(request):
         if form.is_valid():
             record = form.save(commit=True, request=request)
 
-            if ajax == '1':
-                data = {
-                    'status':'success',
-                    'message':'Successfully added new record',
-                    'new_record_id':record.id,
-                    'new_record_name':record.name
-                }
-                return JsonResponse(data)
-
-            messages.add_message(
-                request,
-                messages.SUCCESS,
-                'Successfully added event.',
-                'list-group-item-success') 
-            return redirect('pd_event:event', record_id=record.id)
-        else:
-            messages.add_message(
-                request,
-                messages.WARNING,
-                'Please correct the error(s) and try again',
-                'list-group-item-danger') 
-
-        if ajax == '1':
             data = {
-                'status':'error',
-                'message': ''.join([' '.join(x for x in l) for l in list(form.errors.values())])
+                'status':'success',
+                'message':'Successfully added invoice(s). Click "Ok" to continue.',
+                'action': 'redirect_to',
+                'redirect_to': record.ce_url
             }
             return JsonResponse(data)
+        else:
+            return JsonResponse({
+                'message': 'Please correct the errors and try again',
+                'errors': form.errors.as_json()
+            }, status=400)
     else:
         form = EventForm()
 
@@ -851,7 +838,7 @@ def index(request):
             'urls': urls,
             'menu': menu,
             'terms': Term.objects.all().order_by('-code'),
-            'cohorts': Cohort.objects.all().order_by('name'),
+            'courses': Course.objects.all().order_by('name'),
             'event_types': EventType.objects.all().order_by('name'),
             'api_url': '/ce/events/api/events?format=datatables'
         }
