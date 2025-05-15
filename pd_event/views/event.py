@@ -820,6 +820,7 @@ def index(request):
     if user_has_faculty_role(request.user):
         menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event')
         urls = {
+            'add_new': 'pd_event:event_add_new',
             'all_items': 'pd_event_faculty:events',
             'details_prefix': '/ce/events/event/'
         }
