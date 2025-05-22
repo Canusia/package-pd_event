@@ -697,13 +697,13 @@ def detail(request, record_id):
 
     read_only = False
     if user_has_faculty_role(request.user):
-        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event')
+        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event', 'faculty')
         urls = {
             'all_items': 'pd_event_faculty:events'
         }
         # read_only = True
     else:
-        menu = draw_menu(cis_menu, 'events', 'event_list')
+        menu = draw_menu(cis_menu, 'events', 'event_list', 'ce')
         urls = {
             'add_new': 'pd_event:event_add_new',
             'all_items': 'pd_event:events'
@@ -738,14 +738,14 @@ def add_new(request):
     ajax = request.GET.get('ajax', None)
 
     if user_has_faculty_role(request.user):
-        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event')
+        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event', 'faculty')
         urls = {
             'add_new': 'pd_event:event_add_new',
             'all_items': 'pd_event_faculty:events',
             'details_prefix': '/faculty/events/event/'
         }
     else:
-        menu = draw_menu(cis_menu, 'events', 'event_list')
+        menu = draw_menu(cis_menu, 'events', 'event_list', 'ce')
         urls = {
             'add_new': 'pd_event:event_add_new',
             'details_prefix': '/ce/events/event/',
@@ -833,14 +833,14 @@ def index(request):
      search and index page for staff
     '''
     if user_has_faculty_role(request.user):
-        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event')
+        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event', 'faculty')
         urls = {
             'add_new': 'pd_event:event_add_new',
             'all_items': 'pd_event_faculty:events',
             'details_prefix': '/faculty/events/event/'
         }
     else:
-        menu = draw_menu(cis_menu, 'events', 'event_list')
+        menu = draw_menu(cis_menu, 'events', 'event_list', 'ce')
         urls = {
             'add_new': 'pd_event:event_add_new',
             'details_prefix': '/ce/events/event/',
