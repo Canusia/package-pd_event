@@ -290,7 +290,7 @@ class EventForm(ModelForm):
             'js/pd_events.js'
         ]
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, request, *args, **kwargs):
         instance = kwargs.get('instance')
 
         super().__init__(*args, **kwargs)       
@@ -302,9 +302,26 @@ class EventForm(ModelForm):
             except:
                 ...
 
-        self.fields['courses'].queryset = Course.objects.filter(
-            status__iexact='active'
-        ).order_by('name')
+        from cis.utils import user_has_faculty_role
+        from cis.models.faculty import FacultyCoordinator
+        if request and user_has_faculty_role(request.user):
+            try:
+                faculty_courses = FacultyCoordinator.courses_overseeing(
+                    user=request.user,
+                )
+
+                self.fields['courses'].queryset = Course.objects.filter(
+                    id__in=faculty_courses.values_list('course__id', flat=True),
+                    status__iexact='active'
+                ).order_by('name')
+            except Exception as e:
+                self.fields['courses'].queryset = Course.objects.filter(
+                    status__iexact='active'
+                ).order_by('name')
+        else:
+            self.fields['courses'].queryset = Course.objects.filter(
+                status__iexact='active'
+            ).order_by('name')
             
         self.fields['action'].initial = 'edit_event'
         

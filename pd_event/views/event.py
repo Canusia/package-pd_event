@@ -640,7 +640,7 @@ def detail(request, record_id):
     template = 'pd_event/event.html'
     record = get_object_or_404(Event, pk=record_id)
     
-    form = EventForm(instance=record)
+    form = EventForm(request, instance=record)
     file_form = EventFileForm(event=record)
     email_form = EventEmailForm(record)
     email_after_form = EventEmailForm(record, 'send_email_after_event')
@@ -665,7 +665,7 @@ def detail(request, record_id):
 
 
         if request.POST.get('action') == 'edit_event':
-            form = EventForm(request.POST, instance=record)
+            form = EventForm(request, request.POST, instance=record)
 
             if form.is_valid():
                 record = form.save(commit=False, request=request)
@@ -701,7 +701,7 @@ def detail(request, record_id):
         urls = {
             'all_items': 'pd_event_faculty:events'
         }
-        read_only = True
+        # read_only = True
     else:
         menu = draw_menu(cis_menu, 'events', 'event_list')
         urls = {
@@ -737,8 +737,23 @@ def add_new(request):
     template = 'pd_event/event-add_new.html'
     ajax = request.GET.get('ajax', None)
 
+    if user_has_faculty_role(request.user):
+        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event')
+        urls = {
+            'add_new': 'pd_event:event_add_new',
+            'all_items': 'pd_event_faculty:events',
+            'details_prefix': '/faculty/events/event/'
+        }
+    else:
+        menu = draw_menu(cis_menu, 'events', 'event_list')
+        urls = {
+            'add_new': 'pd_event:event_add_new',
+            'details_prefix': '/ce/events/event/',
+            'all_items': 'pd_event:event'
+        }
+
     if request.method == 'POST':
-        form = EventForm(request.POST)
+        form = EventForm(request, request.POST)
         ajax = request.POST.get('ajax', None)
 
         if form.is_valid():
@@ -757,7 +772,7 @@ def add_new(request):
                 'errors': form.errors.as_json()
             }, status=400)
     else:
-        form = EventForm()
+        form = EventForm(request)
 
     if ajax == '1':
         base_template = 'cis/ajax-base.html'
@@ -776,7 +791,7 @@ def add_new(request):
             },
             'ajax': ajax,
             'base_template': base_template,
-            'menu': draw_menu(cis_menu, 'events', 'event_list')
+            'menu': menu
         })
 
 def delete(request, record_id):
@@ -822,7 +837,7 @@ def index(request):
         urls = {
             'add_new': 'pd_event:event_add_new',
             'all_items': 'pd_event_faculty:events',
-            'details_prefix': '/ce/events/event/'
+            'details_prefix': '/faculty/events/event/'
         }
     else:
         menu = draw_menu(cis_menu, 'events', 'event_list')
