@@ -149,6 +149,12 @@ class Event(models.Model):
         })
     
     @property
+    def faculty_url(self):
+        return reverse_lazy('pd_event_faculty:event', kwargs={
+            'record_id': self.id
+        })
+    
+    @property
     def start_time_local(self):
         return timezone.localtime(self.start_time)
 

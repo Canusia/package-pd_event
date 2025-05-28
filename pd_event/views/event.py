@@ -42,15 +42,11 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
 
         if user_has_faculty_role(self.request.user):
             try:
-                faculty = FacultyCoordinator.objects.get(
-                    user=self.request.user
-                )
-
                 records = records.filter(
-                    cohort__contains=str(faculty.cohort.id)
+                    courses__id__in=FacultyCoordinator.courses_overseeing(self.request.user).values_list('course__id', flat=True)
                 )
-            except:
-                pass
+            except Exception as e:
+                print(e)
         
         if self.request.GET.get('term'):
             records = records.filter(
@@ -763,7 +759,7 @@ def add_new(request):
                 'status':'success',
                 'message':'Successfully added invoice(s). Click "Ok" to continue.',
                 'action': 'redirect_to',
-                'redirect_to': record.ce_url
+                'redirect_to': record.ce_url if not user_has_faculty_role(request.user) else record.faculty_url
             }
             return JsonResponse(data)
         else:
@@ -835,7 +831,7 @@ def index(request):
     if user_has_faculty_role(request.user):
         menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event', 'faculty')
         urls = {
-            'add_new': 'pd_event:event_add_new',
+            'add_new': 'pd_event_faculty:event_add_new',
             'all_items': 'pd_event_faculty:events',
             'details_prefix': '/faculty/events/event/'
         }
