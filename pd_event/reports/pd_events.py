@@ -90,14 +90,12 @@ class pd_events(forms.Form):
         self.fields['event_type'].queryset = EventType.objects.all().order_by('name')
 
     def run(self, task, data):
-        cohorts = data.get('cohort')
-        
+        print(data)
         records = Event.objects.filter(
             event_type__in=data.get('event_type'),
             courses__id__in=data.get('course')
         )
 
-        print(data)
         if data.get('started_on')[0]:
             records = records.filter(
                 start_time__gte=datetime.datetime.strptime(
