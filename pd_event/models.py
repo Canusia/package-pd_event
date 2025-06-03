@@ -356,9 +356,8 @@ class EventAttendee(models.Model):
 
         message = Template(message)
         context = Context({
-            'attendee_first_name' : attendee_info.get('first_name'),
-            'attendee_last_name' : attendee_info.get('last_name'),
-            'cohort' : self.event.cohorts,
+            'attendee_first_name' : self.course_certificate.teacher_highschool.teacher.user.first_name,
+            'attendee_last_name' : self.course_certificate.teacher_highschool.teacher.user.last_name,
             'term' : str(self.event.term),
             'earned_pd_hour' : self.meta.get('pd_hour'),
             'start_date_time' : self.event.start_time_local.strftime('%m/%d/%Y %H:%m'),

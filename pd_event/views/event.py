@@ -197,8 +197,8 @@ def pd_letter(request, attendance_id):
     attendee_info = attendee.get_info()
     pd_template = Template(pd_template)
     pd_html = pd_template.render(Context({
-       'attendee_first_name': attendee_info.get('first_name'),
-       'attendee_last_name': attendee_info.get('last_name'),
+       'attendee_first_name' : attendee.course_certificate.teacher_highschool.teacher.user.first_name,
+        'attendee_last_name' : attendee.course_certificate.teacher_highschool.teacher.user.last_name,
        'cohort': attendee.event.cohorts,
        'term': attendee.event.term,
        'earned_pd_hour': attendee.meta.get('pd_hour'),
