@@ -757,7 +757,7 @@ def add_new(request):
 
             data = {
                 'status':'success',
-                'message':'Successfully added invoice(s). Click "Ok" to continue.',
+                'message':'Successfully added event. Click "Ok" to continue.',
                 'action': 'redirect_to',
                 'redirect_to': record.ce_url if not user_has_faculty_role(request.user) else record.faculty_url
             }
