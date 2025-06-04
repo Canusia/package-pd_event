@@ -197,17 +197,17 @@ def pd_letter(request, attendance_id):
     attendee_info = attendee.get_info()
     pd_template = Template(pd_template)
     pd_html = pd_template.render(Context({
-       'attendee_first_name' : attendee.course_certificate.teacher_highschool.teacher.user.first_name,
+        'attendee_first_name' : attendee.course_certificate.teacher_highschool.teacher.user.first_name,
         'attendee_last_name' : attendee.course_certificate.teacher_highschool.teacher.user.last_name,
-       'cohort': attendee.event.cohorts,
-       'term': attendee.event.term,
-       'earned_pd_hour': attendee.meta.get('pd_hour'),
-       'start_date_time': timezone.localtime(attendee.event.start_time).strftime('%m/%d/%Y %H:%M'),
-       'end_date_time': timezone.localtime(attendee.event.end_time).strftime('%m/%d/%Y %H:%M'),  
-       'event_type': attendee.event.event_type,
-       'pd_note': attendee.meta.get('note'),
-       'delivery_mode': attendee.event.delivery_mode,
-       'description': attendee.event.description
+        'course' : attendee.course_certificate.course.name,
+        'term': attendee.event.term,
+        'earned_pd_hour': attendee.meta.get('pd_hour'),
+        'start_date_time': timezone.localtime(attendee.event.start_time).strftime('%m/%d/%Y %H:%M'),
+        'end_date_time': timezone.localtime(attendee.event.end_time).strftime('%m/%d/%Y %H:%M'),  
+        'event_type': attendee.event.event_type,
+        'pd_note': attendee.meta.get('note'),
+        'delivery_mode': attendee.event.delivery_mode,
+        'description': attendee.event.description
     }))
 
     html = template.render({'main_content': pd_html})

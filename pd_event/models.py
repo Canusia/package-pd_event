@@ -261,11 +261,12 @@ class Event(models.Model):
         for attendee in attendees:
             message = pd_settings.get('event_reminder_template', '')
 
+            to = []
             a = attendee.get_info()
             message = message.format(
-                attendee_first_name=a.get('first_name'),
-                attendee_last_name=a.get('last_name'),
-                cohort=self.cohorts,
+                attendee_first_name=attendee.course_certificate.teacher_highschool.teacher.user.first_name,
+                attendee_last_name=attendee.course_certificate.teacher_highschool.teacher.user.last_name,
+                course=attendee.course_certificate.course.name,
                 term=str(self.term),
                 start_date_time=self.start_time_local.strftime('%m/%d/%Y %H:%m'),
                 end_date_time=self.end_time_local.strftime('%m/%d/%Y %H:%m'),
@@ -274,21 +275,27 @@ class Event(models.Model):
             )
 
             if getattr(settings, 'DEBUG') == True:
-                email.to = [
+                to = [
                     'kadaji@gmail.com'
                 ]
-        
+            else:
+                to.append(attendee.course_certificate.teacher_highschool.teacher.user.email)
+                if attendee.course_certificate.teacher_highschool.teacher.user.alt_email:
+                    to.append(attendee.course_certificate.teacher_highschool.teacher.user.alt_email)
+                if attendee.course_certificate.teacher_highschool.teacher.user.secondary_email:
+                    to.append(attendee.course_certificate.teacher_highschool.teacher.user.secondary_email)
+                    
             template = get_template('cis/email.html')
             html_body = template.render({
-                'message': body
+                'message': message
             })
         
             send_html_mail(
                 subject,
-                body,
+                message,
                 html_body,
                 settings.DEFAULT_FROM_EMAIL,
-                email.to
+                to
             )
             return True
 
@@ -358,6 +365,7 @@ class EventAttendee(models.Model):
         context = Context({
             'attendee_first_name' : self.course_certificate.teacher_highschool.teacher.user.first_name,
             'attendee_last_name' : self.course_certificate.teacher_highschool.teacher.user.last_name,
+            'course' : self.course_certificate.course.name,
             'term' : str(self.event.term),
             'earned_pd_hour' : self.meta.get('pd_hour'),
             'start_date_time' : self.event.start_time_local.strftime('%m/%d/%Y %H:%m'),
