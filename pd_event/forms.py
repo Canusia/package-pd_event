@@ -117,8 +117,8 @@ class EventEmailForm(forms.Form):
 
             attendee_info = attendee.get_info()
             context = Context({
-                'attendee_first_name' : self.course_certificate.teacher_highschool.teacher.user.first_name,
-                'attendee_last_name' : self.course_certificate.teacher_highschool.teacher.user.last_name,
+                'attendee_first_name' : attendee.course_certificate.teacher_highschool.teacher.user.first_name,
+                'attendee_last_name' : attendee.course_certificate.teacher_highschool.teacher.user.last_name,
                 'event_term' : str(event.term),
                 'event_start_date_time' : event.start_time_local.strftime('%m/%d/%Y %I:%m %p'),
                 'event_end_date_time' : event.end_time_local.strftime('%m/%d/%Y %I:%m %p'),
