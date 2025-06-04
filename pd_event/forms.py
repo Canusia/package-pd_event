@@ -47,7 +47,7 @@ class EventEmailForm(forms.Form):
     short_codes = FFields.ReadOnlyField(
         required=False,
         label=mark_safe(
-            '<p class="alert alert-info">Use the form to email event guests.<br><br>Customize the subject and message with the following short codes. {{event_description}}, {{event_start_date_time}}, {{event_end_date_time}}, {{event_term}}, {{attendee_first_name}}, {{attendee_last_name}}</p>'
+            '<p class="alert">Use the form to email event guests.<br><br>Customize the subject and message with the following short codes. {{event_description}}, {{event_start_date_time}}, {{event_end_date_time}}, {{event_term}}, {{attendee_first_name}}, {{attendee_last_name}}, {{courses_name}}</p>'
         ),
         widget=FFields.LongLabelWidget(
             attrs={
@@ -91,7 +91,7 @@ class EventEmailForm(forms.Form):
             del self.fields['email_to']
         else:
             self.fields['short_codes'].label = mark_safe(
-                '<p class="alert alert-info">Customize the subject and message with the following short codes. {{event_description}}, {{event_start_date_time}}, {{event_end_date_time}}, {{event_term}}, {{attendee_first_name}}, {{attendee_last_name}}.<br><br>If sending to attendees {{pd_note}}, {{pd_letter_url}}.</p>'
+                '<p class="card p-3">Customize the subject and message with the following short codes. {{event_description}}, {{event_start_date_time}}, {{event_end_date_time}}, {{event_term}}, {{attendee_first_name}}, {{attendee_last_name}}.<br><br>If sending to attendees {{pd_note}}, {{pd_letter_url}}.</p>'
             )
         
     def save(self, request, event):
@@ -119,6 +119,7 @@ class EventEmailForm(forms.Form):
             context = Context({
                 'attendee_first_name' : attendee.course_certificate.teacher_highschool.teacher.user.first_name,
                 'attendee_last_name' : attendee.course_certificate.teacher_highschool.teacher.user.last_name,
+                'courses_name' : event.sexy_courses,
                 'event_term' : str(event.term),
                 'event_start_date_time' : event.start_time_local.strftime('%m/%d/%Y %I:%m %p'),
                 'event_end_date_time' : event.end_time_local.strftime('%m/%d/%Y %I:%m %p'),
@@ -133,7 +134,7 @@ class EventEmailForm(forms.Form):
                     attendee.save()
 
             text_body = message.render(context)
-            subject = message.render(context)
+            subject = subject.render(context)
 
             to = [
                 attendee_info.get('email')
@@ -176,6 +177,7 @@ class EventEmailForm(forms.Form):
             context = Context({
                 # 'attendee_first_name' : attendee_info.get('first_name'),
                 # 'attendee_last_name' : attendee_info.get('last_name'),
+                'courses_name' : event.sexy_courses,
                 'event_term' : str(event.term),
                 'event_start_date_time' : event.start_time_local.strftime('%m/%d/%Y %I:%m %p'),
                 'event_end_date_time' : event.end_time_local.strftime('%m/%d/%Y %I:%m %p'),
