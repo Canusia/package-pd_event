@@ -137,14 +137,14 @@ class EventEmailForm(forms.Form):
             subject = subject.render(context)
 
             to = [
-                attendee_info.get('email')
+                attendee.course_certificate.teacher_highschool.teacher.user.email
             ]
 
-            if attendee_info.get('alt_email'):
-                to.append('alt_email')
-            
-            if attendee_info.get('secondary_email'):
-                to.append('secondary_email')
+            if attendee.course_certificate.teacher_highschool.teacher.user.alt_email:
+                to.append(attendee.course_certificate.teacher_highschool.teacher.user.alt_email)
+
+            if attendee.course_certificate.teacher_highschool.teacher.user.secondary_email:
+                to.append(attendee.course_certificate.teacher_highschool.teacher.user.secondary_email)
 
             if getattr(settings, 'DEBUG') == True:
                 to = [

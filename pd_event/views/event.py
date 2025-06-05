@@ -31,7 +31,7 @@ from ..forms import EventForm, EventFileForm, EventAttendeeFilterForm, EventEmai
 
 from cis.menu import cis_menu, draw_menu, FACULTY_MENU
 
-from cis.utils import CIS_user_only, user_has_faculty_role, FACULTY_user_only
+from cis.utils import CIS_user_only, user_has_faculty_role, FACULTY_user_only, user_has_cis_role
 
 class EventViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = EventSerializer
@@ -40,7 +40,9 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         records = Event.objects.all()
 
-        if user_has_faculty_role(self.request.user):
+        if user_has_cis_role(self.request.user):
+            ...
+        elif user_has_faculty_role(self.request.user):
             try:
                 records = records.filter(
                     courses__id__in=FacultyCoordinator.courses_overseeing(self.request.user).values_list('course__id', flat=True)
@@ -692,19 +694,19 @@ def detail(request, record_id):
     )
 
     read_only = False
-    if user_has_faculty_role(request.user):
-        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event', 'faculty')
-        urls = {
-            'all_items': 'pd_event_faculty:events'
-        }
-        # read_only = True
-    else:
+    if user_has_cis_role(request.user):
         menu = draw_menu(cis_menu, 'events', 'event_list', 'ce')
         urls = {
             'add_new': 'pd_event:event_add_new',
             'all_items': 'pd_event:events'
         }
-
+    elif user_has_faculty_role(request.user):
+        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event', 'faculty')
+        urls = {
+            'all_items': 'pd_event_faculty:events'
+        }
+        # read_only = True
+    
     return render(
         request,
         template, {
@@ -732,22 +734,22 @@ def add_new(request):
     base_template = 'cis/logged-base.html'
     template = 'pd_event/event-add_new.html'
     ajax = request.GET.get('ajax', None)
-
-    if user_has_faculty_role(request.user):
-        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event', 'faculty')
-        urls = {
-            'add_new': 'pd_event:event_add_new',
-            'all_items': 'pd_event_faculty:events',
-            'details_prefix': '/faculty/events/event/'
-        }
-    else:
+    
+    if user_has_cis_role(request.user):
         menu = draw_menu(cis_menu, 'events', 'event_list', 'ce')
         urls = {
             'add_new': 'pd_event:event_add_new',
             'details_prefix': '/ce/events/event/',
             'all_items': 'pd_event:event'
         }
-
+    elif user_has_faculty_role(request.user):
+        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event', 'faculty')
+        urls = {
+            'add_new': 'pd_event:event_add_new',
+            'all_items': 'pd_event_faculty:events',
+            'details_prefix': '/faculty/events/event/'
+        }
+        
     if request.method == 'POST':
         form = EventForm(request, request.POST)
         ajax = request.POST.get('ajax', None)
@@ -759,7 +761,7 @@ def add_new(request):
                 'status':'success',
                 'message':'Successfully added event. Click "Ok" to continue.',
                 'action': 'redirect_to',
-                'redirect_to': record.ce_url if not user_has_faculty_role(request.user) else record.faculty_url
+                'redirect_to': record.ce_url if user_has_cis_role(request.user) else record.faculty_url
             }
             return JsonResponse(data)
         else:
@@ -828,20 +830,21 @@ def index(request):
     '''
      search and index page for staff
     '''
-    if user_has_faculty_role(request.user):
-        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event', 'faculty')
-        urls = {
-            'add_new': 'pd_event_faculty:event_add_new',
-            'all_items': 'pd_event_faculty:events',
-            'details_prefix': '/faculty/events/event/'
-        }
-    else:
+    if user_has_cis_role(request.user):
         menu = draw_menu(cis_menu, 'events', 'event_list', 'ce')
         urls = {
             'add_new': 'pd_event:event_add_new',
             'details_prefix': '/ce/events/event/',
             'all_items': 'pd_event:event'
         }
+    elif user_has_faculty_role(request.user):
+        menu = draw_menu(FACULTY_MENU, 'events', 'pd_event_faculty:event', 'faculty')
+        urls = {
+            'add_new': 'pd_event_faculty:event_add_new',
+            'all_items': 'pd_event_faculty:events',
+            'details_prefix': '/faculty/events/event/'
+        }
+    
     template = 'pd_event/event-list.html'
     return render(
         request,
