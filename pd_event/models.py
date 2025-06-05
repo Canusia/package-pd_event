@@ -359,8 +359,6 @@ class EventAttendee(models.Model):
         subject = pd_settings.get('pd_email_subject', '')
         message = pd_settings.get('pd_email_template', '')
 
-        attendee_info = self.get_info()
-
         message = Template(message)
         context = Context({
             'attendee_first_name' : self.course_certificate.teacher_highschool.teacher.user.first_name,
@@ -387,10 +385,13 @@ class EventAttendee(models.Model):
         })
 
         to = [
-            attendee_info.get('email'),
-            attendee_info.get('alt_email'),
-            attendee_info.get('secondary_email')
+            self.course_certificate.teacher_highschool.teacher.user.email
         ]
+        if self.course_certificate.teacher_highschool.teacher.user.alt_email:
+            to.append(self.course_certificate.teacher_highschool.teacher.user.alt_email)
+        if self.course_certificate.teacher_highschool.teacher.user.secondary_email:
+            to.append(self.course_certificate.teacher_highschool.teacher.user.secondary_email)
+
         if getattr(settings, 'DEBUG') == True:
             to = ['kadaji@gmail.com']
         
