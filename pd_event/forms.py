@@ -194,7 +194,7 @@ class EventEmailForm(forms.Form):
                 'message': text_body
             })
 
-            subject = message.render(context)
+            subject = subject.render(context)
 
             send_html_mail(
                 subject,

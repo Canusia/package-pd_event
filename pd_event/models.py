@@ -268,8 +268,8 @@ class Event(models.Model):
                 attendee_last_name=attendee.course_certificate.teacher_highschool.teacher.user.last_name,
                 course=attendee.course_certificate.course.name,
                 term=str(self.term),
-                start_date_time=self.start_time_local.strftime('%m/%d/%Y %H:%m'),
-                end_date_time=self.end_time_local.strftime('%m/%d/%Y %H:%m'),
+                start_date_time=self.start_time_local.strftime('%m/%d/%Y %I:%m %p'),
+                end_date_time=self.end_time_local.strftime('%m/%d/%Y %I:%m %p'),
                 event_type=self.event_type,
                 description=self.description
             )
@@ -368,8 +368,8 @@ class EventAttendee(models.Model):
             'course' : self.course_certificate.course.name,
             'term' : str(self.event.term),
             'earned_pd_hour' : self.meta.get('pd_hour'),
-            'start_date_time' : self.event.start_time_local.strftime('%m/%d/%Y %H:%m'),
-            'end_date_time' : self.event.end_time_local.strftime('%m/%d/%Y %H:%m'),
+            'start_date_time' : self.event.start_time_local.strftime('%m/%d/%Y %I:%m %p'),
+            'end_date_time' : self.event.end_time_local.strftime('%m/%d/%Y %I:%m %p'),
             "event_type" : self.event.event_type,
             'pd_note' : self.meta.get('note'),
             'delivery_mode' : self.event.delivery_mode,
