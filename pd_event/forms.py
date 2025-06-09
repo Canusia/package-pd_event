@@ -187,7 +187,7 @@ class EventEmailForm(forms.Form):
             })
 
             text_body = message.render(context)
-            text_body += "\n\n" + "Sent this email to " + ', '.join(to_list)
+            text_body += "\n\n" + "Sent this email to " + '<br>'.join(to_list)
             
             template = get_template('cis/email.html')
             html_body = template.render({
@@ -304,9 +304,13 @@ class EventForm(ModelForm):
             except:
                 ...
 
-        from cis.utils import user_has_faculty_role
+        from cis.utils import user_has_faculty_role, user_has_cis_role
         from cis.models.faculty import FacultyCoordinator
-        if request and user_has_faculty_role(request.user):
+        if request and user_has_cis_role(request.user):
+            self.fields['courses'].queryset = Course.objects.filter(
+                status__iexact='active'
+            ).order_by('name')            
+        elif request and user_has_faculty_role(request.user):
             try:
                 faculty_courses = FacultyCoordinator.courses_overseeing(
                     user=request.user,
@@ -324,7 +328,7 @@ class EventForm(ModelForm):
             self.fields['courses'].queryset = Course.objects.filter(
                 status__iexact='active'
             ).order_by('name')
-            
+
         self.fields['action'].initial = 'edit_event'
         
     class Meta:
