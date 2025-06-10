@@ -167,13 +167,15 @@ class EventEmailForm(forms.Form):
                     'Reply-To': request.user.email
                 }
             )
-
+        
         if data.get('copy_me', False):
 
-            message = Template(data.get('message', ''))
+            message = data.get('message', '')
+            message += "<p>" + "Sent this email to " + '<br>'.join(to_list) + "</p>"
+
+            message = Template(message)
             subject = Template(data.get('subject', ''))
 
-            attendee_info = attendee.get_info()
             context = Context({
                 # 'attendee_first_name' : attendee_info.get('first_name'),
                 # 'attendee_last_name' : attendee_info.get('last_name'),
@@ -187,7 +189,6 @@ class EventEmailForm(forms.Form):
             })
 
             text_body = message.render(context)
-            text_body += "\n\n" + "Sent this email to " + '<br>'.join(to_list)
             
             template = get_template('cis/email.html')
             html_body = template.render({
@@ -201,7 +202,10 @@ class EventEmailForm(forms.Form):
                 text_body,
                 html_body,
                 settings.DEFAULT_FROM_EMAIL,
-                [request.user.email]
+                [request.user.email],
+                headers={
+                    'Reply-To': request.user.email
+                }
             )
         
         event.add_note(
