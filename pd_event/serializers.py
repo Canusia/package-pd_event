@@ -5,7 +5,7 @@ from cis.models.course import Cohort
 
 from cis.serializers.term import TermSerializer
 from cis.serializers.highschool_admin import CustomUserSerializer
-
+from cis.serializers.course import CourseSerializer
 from .models import (
     Event, EventType, EventFile,
     EventAttendee
@@ -33,7 +33,10 @@ class EventSerializer(serializers.ModelSerializer):
     )
 
     course_list = serializers.ListField()
-
+    courses = CourseSerializer(
+        many=True,
+        read_only=True
+    )
     class Meta:
         model = Event
         fields = '__all__'

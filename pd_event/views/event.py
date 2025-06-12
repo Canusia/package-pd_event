@@ -40,18 +40,15 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         records = Event.objects.all()
 
-        print('here')
-        for r in records:
-            print(r.id)
-        # if user_has_cis_role(self.request.user):
-        #     ...
-        # elif user_has_faculty_role(self.request.user):
-        #     try:
-        #         records = records.filter(
-        #             courses__id__in=FacultyCoordinator.courses_overseeing(self.request.user).values_list('course__id', flat=True)
-        #         )
-        #     except Exception as e:
-        #         print(e)
+        if user_has_cis_role(self.request.user):
+            ...
+        elif user_has_faculty_role(self.request.user):
+            try:
+                records = records.filter(
+                    courses__id__in=FacultyCoordinator.courses_overseeing(self.request.user).values_list('course__id', flat=True)
+                )
+            except Exception as e:
+                print(e)
         
         if self.request.GET.get('term'):
             records = records.filter(
