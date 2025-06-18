@@ -82,6 +82,12 @@ class Event(models.Model):
         verbose_name='PD Hour(s)',
         null=True,
     )
+    
+    cost_per_attendee = models.FloatField(
+        default=0.0,
+        verbose_name='Cost Per Attendee',
+        null=True,
+    )
 
     DELIVERY_OPTIONS = [
         ('', 'Select'),
