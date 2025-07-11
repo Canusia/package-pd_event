@@ -268,6 +268,12 @@ class EventFileForm(ModelForm):
         self.fields['event'].initial = event.id
 
 class EventForm(ModelForm):
+    name = forms.CharField(
+        label='Event Name',
+        max_length=255,
+        widget=forms.TextInput(attrs={'class':'col-md-6 col-sm-12'}),
+    )
+
     courses = forms.ModelMultipleChoiceField(
         queryset=None,
         required=False,
@@ -308,6 +314,8 @@ class EventForm(ModelForm):
             except:
                 ...
 
+            self.fields['name'].initial = instance.name
+
         from cis.utils import user_has_faculty_role, user_has_cis_role
         from cis.models.faculty import FacultyCoordinator
         if request and user_has_cis_role(request.user):
@@ -338,6 +346,7 @@ class EventForm(ModelForm):
     class Meta:
         model = Event
         fields = [
+            'name',
             'courses',
             'event_type',
             'term',
@@ -392,12 +401,15 @@ class EventForm(ModelForm):
         record = super().save(commit=False, *args, **kwargs)
 
         data = self.cleaned_data
+
+        record.name = data.get('name')
         record.created_by = request.user
 
         record.start_time = data.get('start_time')
         record.end_time = data.get('end_time')
 
         record.save()
+        record.courses.clear()
 
         for course in data.get('courses'):
             record.courses.add(course)
