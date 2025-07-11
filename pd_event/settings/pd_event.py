@@ -21,6 +21,14 @@ class SettingForm(forms.Form):
     #     required=False,
     #     label="Send Reminder these # of days prior to event")
 
+    # do you want to track pd event cost
+    track_pd_event_cost = forms.BooleanField(
+        required=False,
+        label="Track PD Event Cost",
+        help_text="If checked, you will be able to track the cost of PD events.",
+        initial=False
+    )
+    
     event_reminder_subject = forms.CharField(
         max_length=None,
         widget=forms.HiddenInput,
@@ -72,6 +80,7 @@ class SettingForm(forms.Form):
         return {
             'event_reminder_template': self.cleaned_data.get('event_reminder_template'),
             'event_reminder_subject': self.cleaned_data.get('event_reminder_subject'),
+            'track_pd_event_cost': self.cleaned_data.get('track_pd_event_cost'),
             # 'send_reminder_on': self.cleaned_data.get('send_reminder_on'),
             'pd_template': self.cleaned_data.get('pd_template'),
             'event_signin_template': self.cleaned_data.get('event_signin_template'),

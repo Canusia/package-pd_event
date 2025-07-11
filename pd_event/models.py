@@ -82,6 +82,12 @@ class Event(models.Model):
         verbose_name='PD Hour(s)',
         null=True,
     )
+    
+    cost_per_attendee = models.FloatField(
+        default=0.0,
+        verbose_name='Cost Per Attendee',
+        null=True,
+    )
 
     DELIVERY_OPTIONS = [
         ('', 'Select'),
@@ -111,11 +117,11 @@ class Event(models.Model):
 
     @property
     def sexy_courses(self):
-        courses = ','.join([course.name for course in self.courses.all()])
+        courses = ','.join([course.title for course in self.courses.all()])
         return courses
     
     def __str__(self):
-        courses = ','.join([course.name for course in self.courses.all()])
+        courses = ','.join([course.title for course in self.courses.all()])
 
         return f"{self.term.label} - {self.event_type.name} - ({courses})"
     

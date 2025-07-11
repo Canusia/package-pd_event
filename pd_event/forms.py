@@ -314,7 +314,11 @@ class EventForm(ModelForm):
             except:
                 ...
 
-            self.fields['name'].initial = instance.name
+        from .settings.pd_event import pd_event as pd_event_settings
+        config = pd_event_settings.from_db()
+
+        if not config.get('track_pd_event_cost', False):
+            del self.fields['cost_per_attendee']
 
         from cis.utils import user_has_faculty_role, user_has_cis_role
         from cis.models.faculty import FacultyCoordinator
@@ -354,6 +358,7 @@ class EventForm(ModelForm):
             # 'start_time',
             # 'end_time',
             'pd_hour',
+            'cost_per_attendee',
             'description'
         ]
         exclude = ['created_by', 'cohort', 'name']
