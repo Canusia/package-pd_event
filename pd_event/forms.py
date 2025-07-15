@@ -361,7 +361,7 @@ class EventForm(ModelForm):
             'cost_per_attendee',
             'description'
         ]
-        exclude = ['created_by', 'cohort', 'name']
+        exclude = ['created_by', 'cohort']
 
         labels = {
             # 'name': 'CIS Events DB ID'
