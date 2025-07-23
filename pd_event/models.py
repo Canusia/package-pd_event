@@ -121,9 +121,10 @@ class Event(models.Model):
         return courses
     
     def __str__(self):
-        courses = ','.join([course.title for course in self.courses.all()])
+        
+        # courses = ','.join([course.title for course in self.courses.all()])
 
-        return f"{self.term.label} - {self.event_type.name} - ({courses})"
+        return f"{self.term.label} - {self.event_type.name} - ({self.name})"
     
     def add_note(self, createdby=None, note='', meta=None):
 

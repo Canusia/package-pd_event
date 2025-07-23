@@ -552,6 +552,9 @@ def search_guest_list(request):
     course_status = request.GET.getlist('instructor_course_status')
     since = request.GET.get('since')
     fac_assistant = request.GET.getlist('fac_assistant')
+    highschool_category = request.GET.getlist('highschool_category')
+    skip_attendees_from = request.GET.getlist('skip_attendees_from')
+    skip_guests_from = request.GET.getlist('skip_guests_from')
 
     result = {
         'data': []
@@ -611,6 +614,27 @@ def search_guest_list(request):
             course__id__in=course,
             status__in=course_status
         )
+
+        if highschool_category:
+            records = records.filter(
+                teacher_highschool__highschool__category__in=highschool_category
+            )
+
+        if skip_attendees_from:
+            records = records.exclude(
+                id__in=EventAttendee.objects.filter(
+                    event__id__in=skip_attendees_from,
+                    meta__attendance_status='attended'
+                ).values_list('course_certificate', flat=True)
+            )
+
+        if skip_guests_from:
+            records = records.exclude(
+                id__in=EventAttendee.objects.filter(
+                    event__id__in=skip_guests_from
+                ).values_list('course_certificate', flat=True)
+            )
+
         if since:
             since = datetime.datetime.strptime(since, '%m/%d/%Y')
             records = records.filter(
@@ -621,7 +645,7 @@ def search_guest_list(request):
             result['data'].append({
                 'id': record.certificate_id,
                 'name': f'{record.teacher_highschool.teacher.user.last_name}, {record.teacher_highschool.teacher.user.first_name}',
-                'col_2': f'{record.teacher_highschool.highschool.name}',
+                'col_2': f'{record.teacher_highschool.highschool.name} ({record.teacher_highschool.highschool.category})',
                 'col_3': f'{record.course.name}',
                 'col_4': f'{record.status}',
                 'col_5': f'{record.since}',

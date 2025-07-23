@@ -11,6 +11,7 @@ from django.conf import settings
 
 from django.utils.safestring import mark_safe
 from cis.models.course import Cohort, Course
+from cis.models.highschool import HighSchool
 from cis.models.teacher import Teacher, TeacherHighSchool, TeacherCourseCertificate
 from cis.models.faculty import FacultyCoordinator
 from .models import (
@@ -230,22 +231,45 @@ class EventAttendeeFilterForm(forms.Form):
         widget=forms.CheckboxSelectMultiple
     )
 
-    since = forms.DateField(
+    highschool_category = forms.MultipleChoiceField(
+        choices=[],
         required=False,
-        widget=forms.DateInput(
-            format='%m/%d/%Y',
-            attrs={
-                'class': 'col-md-3 col-sm-6',
-                'placeholder': 'mm/dd/yyyy'
-            }
-        )
+        label='High School Category',
+        widget=forms.CheckboxSelectMultiple
+    )
+
+    skip_attendees_from = forms.ModelMultipleChoiceField(
+        queryset=None,
+        required=False,
+        label='Skip Attendees From'
+    )
+
+    skip_guests_from = forms.ModelMultipleChoiceField(
+        queryset=None,
+        required=False,
+        help_text='Use this if you want to skip guests when attendance has not been marked',
+        label='Skip Guests From'
     )
     
     def __init__(self, event, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        from cis.models.highschool import HighSchool
+        categories = HighSchool.objects.values('category').order_by('category')
+
+        category_choices = []
+        for cat in categories:
+            if ((cat['category'], cat['category']) not in category_choices):
+                category_choices.append(
+                    (cat['category'], cat['category'])
+                )
+        self.fields['highschool_category'].choices = category_choices
 
         self.fields['course'].queryset = event.courses.all().order_by('name')
         self.fields['course'].initial = event.courses.all()
+
+        self.fields['skip_attendees_from'].queryset = Event.objects.filter(courses__in=event.courses.all()).order_by('-start_time')
+
+        self.fields['skip_guests_from'].queryset = Event.objects.filter(courses__in=event.courses.all()).order_by('-start_time')
 
 class EventFileForm(ModelForm):
     class Meta:
