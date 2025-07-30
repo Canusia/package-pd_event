@@ -7,6 +7,22 @@ from ..views.event_type import (
     EventTypeViewSet
 )
 
+from ..views.venue import (
+    index as event_venues,
+    detail as event_venue,
+    add_new as add_event_venue,
+    VenueViewSet
+)
+
+from ..views.info_session import (
+    InfoSessionViewSet,
+    index as info_sessions,
+    detail as info_session,
+    add_new as add_info_session,
+    # update as update_info_session,
+    delete as delete_info_session
+)
+
 from ..views.event import (
     index as events,
     detail as event,
@@ -35,7 +51,9 @@ app_name = 'pd_event'
 router = routers.DefaultRouter()
 router_viewsets = {
     'event_types': EventTypeViewSet,
-    'events': EventViewSet
+    'event_venues': VenueViewSet,
+    'events': EventViewSet,
+    'info_sessions': InfoSessionViewSet
 }
 
 for router_key in router_viewsets.keys():
@@ -56,6 +74,16 @@ urlpatterns = [
     path('event_types/', event_types, name='event_types'),
     path('event_type/<uuid:record_id>/', event_type, name='event_type'),
     path('event_type/add_new/', add_event_type, name='event_type_add_new'),
+
+    path('event_venues/', event_venues, name='event_venues'),
+    path('event_venue/<uuid:record_id>/', event_venue, name='event_venue'),
+    path('event_venue/add_new/', add_event_venue, name='event_venue_add_new'),
+
+    path('info_sessions/', info_sessions, name='info_sessions'),
+    path('info_session/<uuid:record_id>/', info_session, name='info_session'),
+    path('info_session/add_new/', add_info_session, name='info_session_add_new'),
+    # path('info_session/<uuid:record_id>/update/', update_info_session, name='update_info_session'),
+    path('info_session/<uuid:record_id>/delete/', delete_info_session, name='delete_info_session'),
 
     path('', events, name='events'),
     path('search_guest_list/', search_guest_list, name='search_guest_list'),

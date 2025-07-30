@@ -14,11 +14,14 @@ from cis.models.course import Cohort, Course
 from cis.models.highschool import HighSchool
 from cis.models.teacher import Teacher, TeacherHighSchool, TeacherCourseCertificate
 from cis.models.faculty import FacultyCoordinator
+from cis.models.term import Term
 from .models import (
     EventType,
     Event,
     EventAttendee,
-    EventFile
+    EventFile,
+    Venue,
+    InfoSession
 )
 
 from form_fields import fields as FFields
@@ -291,6 +294,49 @@ class EventFileForm(ModelForm):
         self.fields['action'].initial = 'edit_event_file'
         self.fields['event'].initial = event.id
 
+class InfoSessionForm(ModelForm):
+    class Meta:
+        model = InfoSession
+        fields = '__all__'
+        exclude = ['created_by']
+
+        widgets = {
+            # 'notes': CKEditorWidget(
+            #     attrs={
+            #         'class': 'django_ckeditor_5'
+            #     }
+            # )
+        }
+
+    action = forms.CharField(
+        widget=forms.HiddenInput
+    )
+
+    def __init__(self, request, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['action'].initial = 'edit_info_session'
+        self.fields['term'].queryset = Term.objects.all().order_by('-code')
+        self.fields['sessions'].queryset = Event.objects.all().order_by('-start_time')
+        self.fields['sessions'].widget.attrs.update({
+            'class': 'form-control select2',
+            'multiple': 'multiple'
+        })
+
+    def save(self, commit=True, request=None, *args, **kwargs):
+        record = super().save(commit=False, *args, **kwargs)
+
+        data = self.cleaned_data
+
+        record.created_by = request.user
+
+        record.save()
+        record.sessions.clear()
+
+        for session in data.get('sessions'):
+            record.sessions.add(session)
+            
+        return record
+    
 class EventForm(ModelForm):
     name = forms.CharField(
         label='Event Name',
@@ -369,6 +415,8 @@ class EventForm(ModelForm):
                 status__iexact='active'
             ).order_by('name')
 
+        self.fields['venue'].queryset = Venue.objects.all().order_by('name')
+
         self.fields['action'].initial = 'edit_event'
         
     class Meta:
@@ -377,15 +425,16 @@ class EventForm(ModelForm):
             'name',
             'courses',
             'event_type',
+            'venue',
             'term',
             'delivery_mode',
             # 'start_time',
             # 'end_time',
             'pd_hour',
             'cost_per_attendee',
-            'description'
+            'description',
         ]
-        exclude = ['created_by', 'cohort']
+        exclude = ['created_by', 'cohort', 'start_time', 'end_time']
 
         labels = {
             # 'name': 'CIS Events DB ID'
@@ -448,4 +497,9 @@ class EventForm(ModelForm):
 class EventTypeForm(ModelForm):
     class Meta:
         model = EventType
+        fields = '__all__'
+
+class EventVenueForm(ModelForm):
+    class Meta:
+        model = Venue
         fields = '__all__'

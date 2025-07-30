@@ -36,6 +36,23 @@ class EventType(models.Model):
     class Meta:
         ordering = ['name']
 
+class Venue(models.Model):
+    """
+    Venue model to store event location details
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    name = models.CharField(max_length=255)
+    address = models.CharField(max_length=255)
+    city = models.CharField(max_length=100)
+    state = models.CharField(max_length=100)
+    zip = models.CharField(max_length=20)
+
+    def __str__(self):
+        return f"{self.name}, {self.city}, {self.state}"
+
+    class Meta:
+        ordering = ['name']
+
 class Event(models.Model):
     """
     Speaker model
@@ -46,7 +63,7 @@ class Event(models.Model):
         blank=True,
         null=True
     )
-    # venue = models.ForeignKey("cis.Venue", on_delete=models.PROTECT)
+    venue = models.ForeignKey('pd_event.Venue', on_delete=models.PROTECT, null=True, blank=True)
 
     courses = models.ManyToManyField('cis.Course')
 
@@ -473,3 +490,66 @@ class EventAttendee(models.Model):
                 'alt_email': '',
                 'attendee': None
             }
+        
+
+class InfoSession(models.Model):
+    """
+    Info Session model
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    term = models.ForeignKey(
+        'cis.Term',
+        on_delete=models.PROTECT
+    )
+    sessions = models.ManyToManyField(
+        'Event',
+        related_name='info_sessions'
+    )
+    created_on = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey('cis.CustomUser', on_delete=models.PROTECT)
+
+    def __str__(self):
+        return f"Info Session for {self.term}"
+    
+    class Meta:
+        ordering = ['-term__code']
+
+    @property
+    def ce_url(self):
+        return reverse_lazy('pd_event:info_session', kwargs={
+            'record_id': self.id
+        })
+    
+class InfoSessionNote(models.Model):
+    """
+    Info Session Note model
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    info_session = models.ForeignKey(
+        'pd_event.InfoSession',
+        on_delete=models.CASCADE
+    )
+    created_by = models.ForeignKey('cis.CustomUser', on_delete=models.PROTECT)
+    note = models.TextField()
+    created_on = models.DateTimeField(auto_now=True)
+    meta = JSONField(
+        blank=True,
+        null=True
+    )
+    def __str__(self):
+        return f"Note for {self.info_session.term} by {self.created_by.username}"
+    
+class InfoSessionAttendee(models.Model):
+    """
+    Info Session Attendee model
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    info_session = models.ForeignKey(
+        'pd_event.InfoSession',
+        on_delete=models.CASCADE
+    )
+    meta = JSONField(
+        blank=True,
+        null=True
+    )
+    

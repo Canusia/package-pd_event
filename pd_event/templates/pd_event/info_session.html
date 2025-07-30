@@ -1,0 +1,207 @@
+{% extends "cis/logged-base.html" %}
+{%block title %}{{ page_title }}{% endblock %}
+
+{% load templatehelpers %}
+{% load crispy_forms_tags %}
+
+{% block body %}
+
+<main>
+
+
+  <style>
+    tfoot{display: table-footer-group}
+  </style>
+  
+
+    <div class="row">
+        
+        <div class="col-12">
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href='{% url urls.all_items %}' >All Info Sessions</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">Info Session</li>
+                </ol>
+            </nav>
+        </div>
+
+        <div class="col-md-12 col-sm-12">
+            <ul class="nav nav-tabs">
+                <li class="nav-item">
+                    <a class="nav-link active" data-toggle="tab" href="#details">Details</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#manage_attendance">Manage Attendance</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#send_email">Send Email</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#notes">Notes</a>
+                </li>
+            </ul>
+
+
+            {% if messages %}
+            <ul class="messages list-group m-2">
+                {% for message in messages %}
+                <li{% if message.tags %} class="list-group-item {{ message.tags }}" {% endif %}>
+                    {{ message }}</li>
+                    {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if read_only %}
+            <script>
+                jQuery(document).ready(function($) {
+                    $("input, select, textarea").prop("disabled", true);
+                    $("input[type=submit], input[type=button], tfoot, .ajax-add_new").hide()
+                });
+            </script>
+            {% endif %}
+            <!-- Tab panes -->
+            <div class="tab-content">
+                <div class="tab-pane" id="send_email">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 p-3 mb-3">
+
+            {{email_after_form.media}}
+            <form method="post" class="frm_ajax" id="frm_event_email" action="{% url 'pd_event:event' record.id %}" enctype="multipart/form-data">
+                {% csrf_token %}
+                {{ email_after_form | crispy }}
+                <input type="submit" class="btn btn-primary btn-sm" value="Send Email">
+            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="tab-pane active" id="details">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 pt-3 mb-3">
+                            <div class="">
+                                <div class="">
+                                    <div class="">
+                                        <script>
+                                            jQuery(document).ready(function($) {
+                                                $("input.delete").on("click", function() {
+                                                    if(!confirm("Are you sure you want to permanently delete this record and all associated data?"))
+                                                        return;
+                                                    window.location = "{% url 'pd_event:delete_event' record.id%}";
+                                                });
+                                            });
+                                        </script>
+                                        {{form.media}}
+                                        <form action="" method="post">
+                                            {% csrf_token %}
+                                            {{ form | crispy }}
+                                            <input type="submit" class="btn btn-primary btn-sm" value="Update">&nbsp;
+                                            <input type="button" value="Delete" class="btn btn-danger btn-sm delete float-right pull-right">
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end tab #details -->
+
+                <div class="tab-pane" id="notes">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 pt-3 mb-3">
+                            <div class="">
+                                <div class="">
+                                    <div class="text-right">
+                                        <a href="#notes" class="btn btn-sm btn-primary ajax-add_new"
+                                            data-parent="{{record.id}}" data-id="-1" data-modal="modal-add_new"
+                                            data-model="eventnote" data-updater=""><i
+                                                class="fa fas-light fa-plus-circle"></i>&nbsp;Add New Note</a>
+                                    </div>
+                                    <div class="clearfix">&nbsp;</div>
+                                    <div class="">
+                                        <table class="table table-striped">
+                                            <thead>
+                                                <tr>
+                                                    <th>Added On</th>
+                                                    <th>Note</th>
+                                                    <th>Added By</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% if notes %}
+                                                    {% for r in notes %}
+                                                    <tr>
+                                                        <td>{{r.createdon|date:'m/d/Y g:i a'}}</td>
+                                                        <td>
+                                                            {{r.note|safe}}
+                                                        </td>
+                                                        <td>{{r.createdby.first_name}} {{r.createdby.last_name}}</td>
+                                                    </tr>
+                                                    {% endfor %}
+                                                {% else %}
+                                                    <tr>
+                                                        <td colspan="3">No notes found</td>
+                                                    </tr>
+                                                {% endif %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end Notes -->
+
+
+                <div class="tab-pane" id="manage_attendance">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 pt-3 mb-3">
+
+                            <form action="" method="post">
+                                {% csrf_token %}
+                                <div class="table-responsive">
+                                    <table style="width: 100%" class="table table-striped" id="event_attendee_list">
+                                        <thead>
+                                            <tr>
+                                                <th data-name='id' data-data='id'><input style='height: 13px;' type="checkbox" class="toggle-button"
+                                                    name="select-all" id="select-all" /></th>
+                                                <th data-name='name' data-data='name'>Name</th>
+                                                
+                                                <th>Status</th>
+                                                
+                                            </tr>
+                                        </thead>
+
+                                        <tfoot>
+                                            <tr>
+                                                <td colspan="6">
+                                                    <input type="button" class="btn btn-sm btn-primary btn_mark_attendance"
+                                                        data-attendance="attended" id="btn_mark_attended_selected"
+                                                        value="Mark as Attended" name="mark_attended_selected">&nbsp;
+                                                    <input type="button" class="btn btn-sm btn-secondary btn_mark_attendance"
+                                                        data-attendance="not attended"
+                                                        id="btn_mark_not_attended_selected" value="Mark as Not Attended"
+                                                        name="mark_not_attended_selected">&nbsp;
+                                                        <!-- <a href="{%url 'pd_event:export_attendee_list' record.id %}" class="btn btn-sm btn-info d-none">Export Attendee List</a>&nbsp;<input type="button" class="btn btn-sm btn-primary btn_send_pd_letter"
+                                                        data-attendance="send_pd_letter"
+                                                        id="btn_send_pd_letter" value="Send PD Letter"
+                                                        name="send_pd_letter">&nbsp; -->
+                                                </td>
+                                            </tr>
+                                        </tfoot>
+                                    </table>
+                                </div>
+                            </form>
+
+                            <div class="clearfix">&nbsp;</div>
+                                    
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</main>
+{%endblock%}

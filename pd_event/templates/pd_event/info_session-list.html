@@ -49,30 +49,12 @@
                                                     <div class="form-row">
                                                         <div class="col">
                                                             <div class="float-right">
-                                                                <select class="form-control mt-2" name="course">
-                                                                    <option value="">By Course</option>
-                                                                    {% for c in courses %}
-                                                                    <option value="{{c.id}}">{{c.name}}</option>
-                                                                    {% endfor %}
-                                                                </select>&nbsp;
-                                                                <select class="form-control mt-2" name="event_type">
-                                                                    <option value="">By Type</option>
-                                                                    {% for c in event_types %}
-                                                                    <option value="{{c.id}}">{{c.name}}</option>
-                                                                    {% endfor %}
-                                                                </select>
-                                                                &nbsp;
-
                                                                 <select class="form-control mt-2" name="term">
                                                                     <option value="">By Term</option>
                                                                     {% for c in terms %}
                                                                     <option value="{{c.code}}">{{c.label}} {{c.year}}</option>
                                                                     {% endfor %}
                                                                 </select>
-                                                                <input style="margin-top: 8px; margin-right: 10px;"
-                                                                    type="text" placeholder="Start Date"
-                                                                    name="start_time"
-                                                                    class="form-control dateinput">
                                                                 
                                                                 <div class="clearfix">&nbsp;</div>
                                                                 <input name="btn_search" id="id_btn_filter"
@@ -95,25 +77,15 @@
                                     style="width:100%" data-server-side="true" data-ajax="{{api_url}}">
                                     <thead>
                                         <tr>
-                                            <th data-data="name" searchable="1" data-name="name">Event Name</th>
-                                            <th data-data="venue.name" searchable="1" data-name="venue.name">Venue</th>
-                                            <th data-data="course_list" searchable="1" data-name="courses.name">Courses</th>
-                                            <th data-data="event_type.name" searchable="1" data-name="event_type.name">
-                                                Type</th>
+                                            
                                             <th data-data="term.label" searchable="1" data-name="term.label">Term
                                             </th>
-                                            <th data-data="start_time" searchable="1" data-name="start_time">Start Date/Time
+                                            <th data-data="sessions" searchable="1" data-name="sessions">Sessions
                                             </th>
-                                            <th data-data="end_time" searchable="1" data-name="end_time">End Date/Time</th>
                                             <th data-data="id" data-name='id'><span class="sr-only">Actions</span></th>
                                         </tr>
                                     </thead>
                                     <tfoot>
-                                        <th>Name</th>
-                                        <th>Venue</th>
-                                        <th>Course</th>
-                                        <th>Type</th>
-                                        <th>Term</th>
                                         <th></th>
                                         <th></th>
                                         <th></th>
@@ -218,42 +190,13 @@
                                     null,
                                     {
                                         'render': function (data, type, row, meta) {
-                                            if (row.venue && row.venue.name) {
-                                                return row.venue.name;
-                                            } else {
-                                                return 'No Venue';
+                                            let col = ''
+                                            for (let i = 0; i < row.sessions.length; i++) {
+                                                col += `${row.sessions[i].name}, `
                                             }
+                                            col = col.slice(0, -2);  // Remove trailing comma and space 
+                                            return col
                                         }
-                                    },
-                                    {
-                                        // 'searchable': false,
-                                        'orderable': false,
-                                        'render': function (data, type, row, meta) {
-                                            return row.course_list
-                                        }
-                                    },
-                                    {
-                                        // 'searchable': false,
-                                        // 'orderable': false,
-                                        
-                                    },
-                                    {
-                                        // 'searchable': false,
-                                        // 'orderable': false,
-                                        
-                                        'render': function(data, type, row, meta) {
-                                            return row.term.label
-                                        }
-                                    },
-                                    {
-                                        // 'searchable': false,
-                                        // 'orderable': false,
-                                        
-                                    },
-                                    {
-                                        // 'searchable': false,
-                                        // 'orderable': false,
-                                        
                                     },
                                     {
                                         'searchable': false,

@@ -8,7 +8,8 @@ from cis.serializers.highschool_admin import CustomUserSerializer
 from cis.serializers.course import CourseSerializer
 from .models import (
     Event, EventType, EventFile,
-    EventAttendee
+    EventAttendee, Venue,
+    InfoSession, InfoSessionNote, InfoSessionAttendee
 )
 
 class EventTypeSerializer(serializers.ModelSerializer):
@@ -20,10 +21,17 @@ class EventTypeSerializer(serializers.ModelSerializer):
         model = EventType
         fields = '__all__'
 
+# add venue serializer
+class VenueSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Venue
+        fields = '__all__'
+        
 class EventSerializer(serializers.ModelSerializer):
     event_type = EventTypeSerializer()
     term = TermSerializer()
-    
+    venue = VenueSerializer()
+
     start_time = serializers.DateTimeField(
         format='%m/%d/%Y %H:%M'
     )
@@ -42,3 +50,26 @@ class EventSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 
+class InfoSessionSerializer(serializers.ModelSerializer):
+    term = TermSerializer()
+    notes = serializers.SerializerMethodField()
+    attendees = serializers.SerializerMethodField()
+
+    sessions = EventSerializer(
+        many=True,
+        read_only=True
+    )
+
+    created_by = CustomUserSerializer(
+        read_only=True
+    )
+    
+    class Meta:
+        model = InfoSession
+        fields = '__all__'
+
+    def get_notes(self, obj):
+        return InfoSessionNote.objects.filter(info_session=obj).values()
+
+    def get_attendees(self, obj):
+        return InfoSessionAttendee.objects.filter(info_session=obj).values()
