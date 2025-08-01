@@ -1,0 +1,103 @@
+{% extends "cis/base.html" %}
+
+
+  {% load static %}
+ 
+
+{% load templatehelpers %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{MYCE_SETTINGS.college_name}} {{ MYCE_SETTINGS.site_name }}{% endblock %}
+{% block body %}
+
+
+  {% include 'cis/header-includes.html' %}
+<main role="main" id="content">
+
+    <div id="page_content_header">
+
+        <div class="container">
+            <div class="mt-4 mb-4 bg-light">
+                {{intro|safe}}
+            </div>
+        </div>
+    </div>
+
+    <div class="">
+        <div class="container">
+
+            <div class="row">
+                <div class="col-12">
+
+                    {% if messages %}
+                    <ul class="messages list-group">
+                        {% for message in messages %}
+                        <li{% if message.tags %} class="list-group-item {{ message.tags }}" {% endif %}>
+                            {{ message }}</li>
+                            {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    <!-- Tab panes -->
+                    <div id="current" class="">
+                        <div class="row">
+                            <div class="col-md-12 col-sm-12">
+                                <div class="card">
+                                    <div class="card-body">
+
+<form method="post">
+    {% csrf_token %}
+
+    <h4>RSVP Information</h4>
+    {{ rsvp_form|crispy }}
+
+    <div class="card mb-3">
+        <div class="card-body">
+        <h4>Attendees</h4>
+        {{ attendee_formset.management_form }}
+        
+        {% for form in attendee_formset %}
+            <div class="attendee-form mb-3 p-3">
+                {{form.name|as_crispy_field}}
+                {{form.email|as_crispy_field}}
+                {{form.position|as_crispy_field}}
+                
+            </div>
+        {% endfor %}
+        </div>
+    </div>
+
+    <button type="submit" class="btn btn-primary">Save & Continue</button>
+</form>
+                                        <p class="alert alert-info mt-3">In the next step you will be able to select the
+                                            Syracuse University course(s) you are interested in learning more about
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div> <!-- end row -->
+    </div> <!-- end container -->
+    </div> <!-- end py-5 -->
+
+</main>
+
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery.formset/1.2.2/jquery.formset.min.js"
+    integrity="sha512-ltwjKsDTo3hW/wV66ZaEkf2wOAFxmg7rWM76J8kOcYKLSKy44WBYO/BFaNNH3NGDS8BSz3meB9wtSnm41oL+pA=="
+    crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<script>
+    jQuery(document).ready(function ($) {
+        // Initialize the formset for attendees
+        $('.attendee-form').formset({
+            addText: '<div class="col-12 mt-3">Add New Attendee <i class="fa faw fas fa-plus"></i></div>',
+            deleteText: '<div class="col-2">Remove <i class="fa faw fas fa-trash"></i></div>'
+        });
+    });
+
+</script>
+{% endblock %}

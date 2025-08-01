@@ -33,6 +33,43 @@ from cis.menu import cis_menu, draw_menu, FACULTY_MENU
 
 from cis.utils import CIS_user_only, user_has_faculty_role, FACULTY_user_only, user_has_cis_role
 
+from django.forms import formset_factory
+from ..forms import AttendeeForm, InfoSessionRSVPForm
+
+AttendeeFormSet = formset_factory(AttendeeForm, extra=1, can_delete=True)
+
+# views.py
+def start_rsvp(request):
+    if request.method == 'POST':
+        rsvp_form = InfoSessionRSVPForm(request.POST)
+        attendee_formset = AttendeeFormSet(request.POST, prefix='attendee')
+
+        if rsvp_form.is_valid() and attendee_formset.is_valid():
+            # Process RSVP form
+            main_data = rsvp_form.cleaned_data
+            
+            # Process formset data
+            attendees = []
+            for form in attendee_formset:
+                if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                    attendees.append(form.cleaned_data)
+
+            # Save or send RSVP data
+            # ...
+
+            # step 2
+            # return redirect('rsvp_thank_you')  # or render confirmation
+
+    else:
+        rsvp_form = InfoSessionRSVPForm()
+        attendee_formset = AttendeeFormSet(prefix='attendee')
+
+    return render(request, 'pd_event/info_session_rsvp.html', {
+        'rsvp_form': rsvp_form,
+        'attendee_formset': attendee_formset,
+    })
+
+
 class InfoSessionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = InfoSessionSerializer
     permission_classes = [CIS_user_only|FACULTY_user_only]

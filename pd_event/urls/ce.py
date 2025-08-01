@@ -20,7 +20,9 @@ from ..views.info_session import (
     detail as info_session,
     add_new as add_info_session,
     # update as update_info_session,
-    delete as delete_info_session
+    delete as delete_info_session,
+
+    start_rsvp
 )
 
 from ..views.event import (

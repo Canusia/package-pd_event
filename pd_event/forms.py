@@ -10,7 +10,7 @@ from django.template.loader import get_template, render_to_string
 from django.conf import settings
 
 from django.utils.safestring import mark_safe
-from cis.models.course import Cohort, Course
+from cis.models.course import Cohort, Course, Location
 from cis.models.highschool import HighSchool
 from cis.models.teacher import Teacher, TeacherHighSchool, TeacherCourseCertificate
 from cis.models.faculty import FacultyCoordinator
@@ -21,13 +21,16 @@ from .models import (
     EventAttendee,
     EventFile,
     Venue,
-    InfoSession
+    InfoSession,
+    InfoSessionAttendee
 )
 
 from form_fields import fields as FFields
 from cis.validators import validate_html_short_code, validate_cron
 from django_ckeditor_5.widgets import CKEditor5Widget as CKEditorWidget
 
+from cis.utils import user_has_cis_role, user_has_faculty_role
+from captcha.fields import ReCaptchaField
 from mailer import send_mail, send_html_mail
 
 class EventEmailForm(forms.Form):
@@ -336,7 +339,8 @@ class InfoSessionForm(ModelForm):
             record.sessions.add(session)
             
         return record
-    
+
+
 class EventForm(ModelForm):
     name = forms.CharField(
         label='Event Name',
@@ -503,3 +507,231 @@ class EventVenueForm(ModelForm):
     class Meta:
         model = Venue
         fields = '__all__'
+
+
+class AttendeeForm(forms.Form):
+    name = forms.CharField(
+        required=True,
+        label='Attendee Name',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Jane Doe'})
+    )
+    email = forms.EmailField(
+        required=True,
+        label='Attendee Email',
+        widget=forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'jane@example.com'})
+    )
+    position = forms.CharField(
+        required=False,
+        label='Position',
+        widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Counselor, Teacher, etc.'})
+    )
+
+class InfoSessionRSVPForm(forms.Form):
+    your_name = forms.CharField(
+        required=True,
+        label='Your Name',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-6',
+                'placeholder': 'Dr. John Smith',
+            }
+        )
+    )
+
+    your_email = forms.EmailField(
+        label='Your Email',
+        help_text='Please enter a valid email',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-5'
+            }
+        )
+    )
+
+    hs_subsection = FFields.LongLabelField(
+        required=False,
+        label='',
+        initial='High School Information',
+        widget=FFields.LongLabelWidget(
+            attrs={
+                'class':'h-100 border-0',
+                'style': 'padding-left: 0; font-size: 1.3em;'
+            }
+        )
+    )
+
+    highschool_name = forms.CharField(
+        required=True,
+        label='High School Name',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-6'
+            }
+        )
+    )
+
+    highschool_code = forms.CharField(
+        required=False,
+        label='High School Code',
+        help_text='CEEB Code, if known',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-6'
+            }
+        )
+    )
+
+    highschool_address = forms.CharField(
+        required=True,
+        label='High School Address Line 1',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-8'
+            }
+        )
+    )
+
+    highschool_city = forms.CharField(
+        required=True,
+        label='City',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-4'
+            }
+        )
+    )
+
+    highschool_state = forms.CharField(
+        required=True,
+        label='State/Province',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-4'
+            }
+        )
+    )
+
+    highschool_postal_code = forms.CharField(
+        required=True,
+        label='Zip / Postal Code',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-3'
+            }
+        )
+    )
+
+    highschool_country = forms.ModelChoiceField(
+        label='Country',
+        queryset=None
+    )
+
+    highschool_phone = forms.CharField(
+        required=True,
+        label='Phone',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-3'
+            }
+        )
+    )
+
+    highschool_fax = forms.CharField(
+        required=True,
+        label='Fax',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-3'
+            }
+        )
+    )
+
+    hs_admin_subsection = FFields.LongLabelField(
+        required=False,
+        label='',
+        initial='Please enter attendee information',
+        widget=FFields.LongLabelWidget(
+            attrs={
+                'class':'h-100 border-0',
+                'style': 'padding-left: 0; font-size: 1.3em;'
+            }
+        )
+    )
+
+    action = forms.CharField(
+        required=True,
+        widget=forms.HiddenInput
+    )
+
+    captcha = ReCaptchaField(
+        label=''
+    )
+
+    def __init__(self, request=None, record=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        if request:
+            if user_has_cis_role(request.user):
+                del self.fields['captcha']
+
+                self.fields['your_name'].label = 'Submitter Name'
+                self.fields['your_email'].label = 'Submitter Email'
+        else:
+            del self.fields['captcha']
+
+            self.fields['your_name'].label = 'Submitter Name'
+            self.fields['your_email'].label = 'Submitter Email'
+
+        self.fields['action'].initial = 'part_1'
+        self.fields['highschool_country'].queryset = Location.objects.all().order_by('name')
+
+        if record:
+            self.fields['your_name'].initial = record.school_contacts['submitted_by']['name']
+            self.fields['your_email'].initial = record.school_contacts['submitted_by']['email']
+
+            self.fields['highschool_name'].initial = record.name
+            self.fields['district_name'].initial = record.district
+
+            self.fields['highschool_code'].initial = record.information['address'].get('code')
+            self.fields['highschool_address'].initial = record.information['address']['address']
+            self.fields['highschool_city'].initial = record.information['address']['city']
+            self.fields['highschool_state'].initial = record.information['address']['state']
+            self.fields['highschool_postal_code'].initial = record.information['address'].get('postal_code')
+            self.fields['highschool_phone'].initial = record.information['address'].get('phone')
+            self.fields['highschool_fax'].initial = record.information['address'].get('fax')
+            self.fields['highschool_country'].initial = record.information['address']['country_id']
+
+    def save(self, commit=True, app=None):
+        data = self.cleaned_data
+
+        rsvp = InfoSessionAttendee.objects.create(
+            meta={
+                'your_name': self.cleaned_data['your_name'],
+                'your_email': self.cleaned_data['your_email'],
+                'highschool_name': self.cleaned_data['highschool_name'],
+                'highschool_code': self.cleaned_data['highschool_code'],
+                'highschool_address': self.cleaned_data['highschool_address'],
+                'highschool_city': self.cleaned_data['highschool_city'],
+                'highschool_state': self.cleaned_data['highschool_state'],
+                'highschool_postal_code': self.cleaned_data['highschool_postal_code'],
+                'highschool_phone': self.cleaned_data['highschool_phone'],
+                'highschool_fax': self.cleaned_data['highschool_fax'],
+                'highschool_country': self.cleaned_data['highschool_country']
+            }
+        )
+                
+        # Save attendee formset data
+        attendees = []
+        if hasattr(self, 'attendee_formset'):
+            for form in self.attendee_formset:
+                if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                    attendees.append({
+                        'name': form.cleaned_data['name'],
+                        'email': form.cleaned_data['email'],
+                        'position': form.cleaned_data.get('position'),
+                    })
+        
+        rsvp['meta']['attendees'] = attendees
+        rsvp.save()
+
+        return rsvp
