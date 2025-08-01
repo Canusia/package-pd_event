@@ -60,6 +60,9 @@ class InfoSessionSerializer(serializers.ModelSerializer):
         read_only=True
     )
 
+    rsvp_url = serializers.CharField(
+        read_only=True
+    )
     created_by = CustomUserSerializer(
         read_only=True
     )
@@ -67,7 +70,9 @@ class InfoSessionSerializer(serializers.ModelSerializer):
     class Meta:
         model = InfoSession
         fields = '__all__'
-
+        datatables_always_serialize = (
+            'id', 'rsvp_url'
+        )
     def get_notes(self, obj):
         return InfoSessionNote.objects.filter(info_session=obj).values()
 

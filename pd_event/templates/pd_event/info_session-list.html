@@ -80,6 +80,8 @@
                                             
                                             <th data-data="term.label" searchable="1" data-name="term.label">Term
                                             </th>
+                                            <th data-data="name" searchable="1" data-name="name">Name
+                                            </th>
                                             <th data-data="sessions" searchable="1" data-name="sessions">Sessions
                                             </th>
                                             <th data-data="id" data-name='id'><span class="sr-only">Actions</span></th>
@@ -87,6 +89,7 @@
                                     </thead>
                                     <tfoot>
                                         <th></th>
+                                        <th>Name</th>
                                         <th></th>
                                         <th></th>
                                     </tfoot>
@@ -187,7 +190,17 @@
                                 processing: true,
                                 'lengthMenu': [30, 50, 100],
                                 'columns': [
-                                    null,
+                                    {
+                                        'render': function (data, type, row, meta) {
+                                            return row.term.label + " " + row.term.year
+                                        }
+                                    },
+                                    {
+                                        'render': function (data, type, row, meta) {
+                                            return row.name + "<br>" + 
+                                            "<small>" + row.rsvp_url + "</small>"
+                                        }
+                                    },
                                     {
                                         'render': function (data, type, row, meta) {
                                             let col = ''

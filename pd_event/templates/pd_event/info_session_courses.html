@@ -1,0 +1,131 @@
+{% extends "cis/base.html" %}
+
+{% load templatehelpers %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{MYCE_SETTINGS.college_name}} {{ MYCE_SETTINGS.site_name }}{% endblock %}
+{% block body %}
+
+<main role="main" id="content">
+
+    <div id="page_content_header">
+
+        <div class="container">
+            <div class="mt-4 mb-4 bg-light">
+                {{intro|safe}}
+            </div>
+        </div>
+    </div>
+
+    <div class="">
+        <div class="container">
+
+            <div class="row">
+                <div class="col-12">
+
+                    {% if messages %}
+                    <ul class="messages list-group mb-2">
+                        {% for message in messages %}
+                        <li{% if message.tags %} class="list-group-item {{ message.tags }}" {% endif %}>
+                            {{ message }}</li>
+                            {% endfor %}
+                    </ul>
+                    {% endif %}
+
+                    <script>
+                        jQuery(document).ready(function ($) {
+                            $(document).on('submit', '#frm_submit_application', function(event) {
+
+                            let table = $("#available_courses").DataTable()    
+                            table.search('').draw();
+
+                            return true;
+                            });
+
+                            $("#available_courses").DataTable({
+                                // searchPanes: true,
+                                // dom: 'Pfrtip',
+                                'paging': false,
+                                "lengthMenu": [ 50, 75, 100 ],
+                                'scrollY': '500',
+                                order: [[1, 'asc']],
+                                columnDefs: [
+                                    {
+                                        'targets': [1],
+                                        'visible': false,
+                                    },
+                                    {
+                                        'targets': [1],
+                                        'sortable': false
+                                    }
+                                ],
+                                rowGroup: {
+                                    dataSrc: 1,
+                                    startRender: function (rows, group) {
+                                        return '<h4>' + group + '</h4>'
+                                    }
+                                }
+                            })
+                        })
+                    </script>
+                    <!-- Tab panes -->
+                    <div id="current" class="">
+                        <div class="row">
+                            <div class="col-md-12 col-sm-12">
+                                <div class="card">
+                                    <div class="card-body">
+                                        {% if record.can_edit %}
+                                        <form method="POST" enctype="multipart/form-data" id="frm_submit_application" >
+                                            {% csrf_token %}
+                                            <div class="bg-light mb-3 p-3 bordered">
+                                                <table class="table dataTable table-striped" id="available_courses">
+                                                    <thead>
+                                                        <tr>
+                                                            <th>Select Course</th>
+                                                            <th>Stream</th>
+                                                            <th>Course</th>
+                                                        </tr>
+                                                    </thead>
+
+                                                    <tbody>
+                                                        {%for course in available_courses %}
+                                                        <tr>
+                                                            <td><input class="form-control" type="checkbox"
+                                                                    name="course" value="{{course.id}}"></td>
+                                                            <td>{{course.stream}}</td>
+                                                            <td>
+                                                                <h5><small class="text-muted">{{course.name}}</small><br>{{course.title}}&nbsp;&nbsp;<small>{{course.credit_hours}}
+                                                                        credits (<a target='_blank' href='{{course.url}}'>Course Description</a>)</small></h5>
+                                                            </td>
+                                                        </tr>
+                                                        {% endfor %}
+                                                    </tbody>
+                                                </table>
+                                            </div>
+                                            {{ form.other_college_course|as_crispy_field}}
+                                            {{ form.other_course|as_crispy_field}}
+                                            
+                                            {{ form.action|as_crispy_field }}
+
+                                            <button type="submit" class="btn btn-primary">Submit RSVP
+                                                &raquo;</button>
+                                        </form>
+                                        {% else %}
+
+                                        <p class="alert alert-danger">This application cannot be edited at this time. If
+                                            you need to edit or make changes please call our office.</p>
+                                        {{record.coursesAsHTML}}
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div> <!-- end row -->
+    </div> <!-- end container -->
+    </div> <!-- end py-5 -->
+
+</main>
+{% endblock %}

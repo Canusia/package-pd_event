@@ -298,10 +298,57 @@ class EventFileForm(ModelForm):
         self.fields['event'].initial = event.id
 
 class InfoSessionForm(ModelForm):
+
+    page_1_intro = forms.CharField(
+        widget=forms.Textarea(
+            attrs={
+                'class': 'form-control',
+            }
+        ),
+        required=False,
+        label='Page 1 Intro',
+        help_text='This text will appear on the first page of the info session RSVP form'
+    )
+    page_2_intro = forms.CharField(
+        widget=forms.Textarea(
+            attrs={
+                'class': 'form-control',
+            }
+        ),
+        required=False,
+        label='Page 2 Intro',
+        help_text='This text will appear on the second page of the info session RSVP form'
+    )
+
+    redirect_url = forms.CharField(
+        widget=forms.TextInput,
+        required=False,
+        label='Redirect URL',
+        help_text='If you want to redirect the user to a different page after submitting the form',
+        initial='/'
+    )
+
+    def clean_redirect_url(self):
+        redirect_url = self.cleaned_data.get('redirect_url')
+
+        if not redirect_url:
+            return redirect_url
+        
+        # check if this is a valid fully qualified URL
+        from django.core.validators import URLValidator
+        from django.core.exceptions import ValidationError
+        url_validator = URLValidator()
+        try:
+            url_validator(redirect_url)
+        except ValidationError:
+            raise ValidationError('Please enter a valid URL')
+
+        return redirect_url
+    
     class Meta:
         model = InfoSession
         fields = '__all__'
-        exclude = ['created_by']
+        exclude = ['created_by', 'meta']
 
         widgets = {
             # 'notes': CKEditorWidget(
@@ -325,10 +372,24 @@ class InfoSessionForm(ModelForm):
             'multiple': 'multiple'
         })
 
+        if kwargs.get('instance'):
+            instance = kwargs.get('instance')
+            if instance.meta:
+                self.fields['page_1_intro'].initial = instance.meta.get('page_1_intro', '')
+                self.fields['page_2_intro'].initial = instance.meta.get('page_2_intro', '')
+                self.fields['redirect_url'].initial = instance.meta.get('redirect_url', '/')
+
     def save(self, commit=True, request=None, *args, **kwargs):
         record = super().save(commit=False, *args, **kwargs)
 
         data = self.cleaned_data
+
+        if not record.meta:
+            record.meta = {}
+
+        record.meta['page_1_intro'] = data.get('page_1_intro')
+        record.meta['page_2_intro'] = data.get('page_2_intro')
+        record.meta['redirect_url'] = data.get('redirect_url')
 
         record.created_by = request.user
 
@@ -527,6 +588,17 @@ class AttendeeForm(forms.Form):
     )
 
 class InfoSessionRSVPForm(forms.Form):
+    events = forms.ModelChoiceField(
+        queryset=None,
+        required=True,
+        label='Select the session you want to attend',
+        widget=forms.RadioSelect(
+            attrs={
+                'class': 'form-check-input'
+            }
+        )
+    )
+
     your_name = forms.CharField(
         required=True,
         label='Your Name',
@@ -541,6 +613,16 @@ class InfoSessionRSVPForm(forms.Form):
     your_email = forms.EmailField(
         label='Your Email',
         help_text='Please enter a valid email',
+        widget=forms.TextInput(
+            attrs={
+                'class': 'col-md-5'
+            }
+        )
+    )
+
+    your_role = forms.CharField(
+        label='Your Role',
+        help_text='Please enter your role',
         widget=forms.TextInput(
             attrs={
                 'class': 'col-md-5'
@@ -637,7 +719,7 @@ class InfoSessionRSVPForm(forms.Form):
     )
 
     highschool_fax = forms.CharField(
-        required=True,
+        required=False,
         label='Fax',
         widget=forms.TextInput(
             attrs={
@@ -667,7 +749,7 @@ class InfoSessionRSVPForm(forms.Form):
         label=''
     )
 
-    def __init__(self, request=None, record=None, *args, **kwargs):
+    def __init__(self,info_session, request=None, record=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
         if request:
@@ -684,6 +766,8 @@ class InfoSessionRSVPForm(forms.Form):
 
         self.fields['action'].initial = 'part_1'
         self.fields['highschool_country'].queryset = Location.objects.all().order_by('name')
+
+        self.fields['events'].queryset = info_session.sessions.all().order_by('start_time')
 
         if record:
             self.fields['your_name'].initial = record.school_contacts['submitted_by']['name']
@@ -735,3 +819,70 @@ class InfoSessionRSVPForm(forms.Form):
         rsvp.save()
 
         return rsvp
+    
+
+COLLEGE_COURSE_OPTIONS = (
+    ('1', 'Advanced Placement (AP)'),
+    ('2', 'International Baccalaureate (IB)'),
+    ('3', 'Community College'),
+    ('4', 'Another 4 year Institution'),
+    ('5', 'Other'),
+)
+
+class InfoSessionCourseForm(forms.Form):
+    course = forms.CharField(
+        required=True,
+        widget=forms.HiddenInput
+    )
+    
+    other_college_course = forms.MultipleChoiceField(
+        label='What other college level course(s) do you currently offer?',
+        choices=COLLEGE_COURSE_OPTIONS,
+        required=False,
+        widget=forms.CheckboxSelectMultiple
+    )
+
+    other_course = forms.CharField(
+        required=False,
+        label='If other, please specify'
+    )
+
+    action = forms.CharField(
+        required=True,
+        widget=forms.HiddenInput
+    )
+
+    def clean(self):
+        self.cleaned_data = super().clean()
+
+        course = list(
+            map(lambda x:str(x).strip(), self.data.getlist('course')))
+
+        self.cleaned_data['course'] = course
+        return self.cleaned_data
+
+    def __init__(self, request, info_session_attendee=None, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.fields['course'].choices = [
+            (course.id, course.id) for course in Course.objects.all()
+        ]
+            
+    def save(self, record, commit=True):
+        data = self.cleaned_data
+
+        if not record.meta.get('interested_courses'):
+            record.meta['interested_courses'] = []
+
+        record.meta['other_course'] = data.get('other_course')
+        record.meta['other_college_course'] = data.get('other_college_course')
+
+        for course_id in data.get('course'):
+            course = Course.objects.get(pk=course_id)
+
+            record.meta['interested_courses'].append({
+                'course_id': course.id,
+                'course_name': course.name
+            })
+
+        return record

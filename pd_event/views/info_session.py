@@ -27,45 +27,129 @@ from cis.models.teacher import (
 
 from ..models import EventType, Event, EventFile, EventAttendee, InfoSession, InfoSessionNote, InfoSessionAttendee
 from ..serializers import EventSerializer, InfoSessionSerializer
-from ..forms import InfoSessionForm, EventFileForm, EventAttendeeFilterForm, EventEmailForm
+from ..forms import InfoSessionForm, EventFileForm, EventAttendeeFilterForm, EventEmailForm, InfoSessionCourseForm
 
 from cis.menu import cis_menu, draw_menu, FACULTY_MENU
 
 from cis.utils import CIS_user_only, user_has_faculty_role, FACULTY_user_only, user_has_cis_role
 
 from django.forms import formset_factory
-from ..forms import AttendeeForm, InfoSessionRSVPForm
+from ..forms import AttendeeForm, InfoSessionRSVPForm, InfoSessionCourseForm
 
 AttendeeFormSet = formset_factory(AttendeeForm, extra=1, can_delete=True)
 
-# views.py
-def start_rsvp(request):
+
+def submit_info_session_courses(request, rsvp_id):
+    """
+    Handle new request submission in the frontend
+    """
+    template = 'pd_event/info_session_courses.html'
+    record = get_object_or_404(InfoSessionAttendee, pk=rsvp_id)
+
+    # page_settings = new_school_application_settings.from_db()
+    # context = {
+    #     'intro': page_settings.get('app_course_page_header')
+    # }
+
+    context = {}
+    form = InfoSessionCourseForm(
+        request,
+        record,
+        initial={
+            'action':'part_2'
+        }
+    )
+
     if request.method == 'POST':
-        rsvp_form = InfoSessionRSVPForm(request.POST)
-        attendee_formset = AttendeeFormSet(request.POST, prefix='attendee')
+        form = InfoSessionCourseForm(request, record, request.POST)
+
+        if form.is_valid():
+            record = form.save(record, True)
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                'Thank you for submitting your rsvp. We will be in touch with you soon.',
+                'list-group-item-success'
+            )
+
+            if record.meta.get('redirect_url'):
+                return redirect(record.meta.get('redirect_url'))
+            return redirect('index')
+        else:
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                'Please correct the errors and try again. ' + str(form.errors),
+                'list-group-item-danger'
+            )
+
+    available_courses = Course.available_for_new_schools()
+
+    context['form'] = form
+    context['intro'] = record.meta.get('page_2_intro', 'Please select the courses you are interested in offering.')
+
+    context['record'] = record
+    context['available_courses'] = available_courses
+
+    return render(request, template, context)
+
+
+# views.py
+def start_rsvp(request, info_session_id):
+    """
+    """
+    info_session = get_object_or_404(InfoSession, pk=info_session_id)
+
+    if request.method == 'POST':
+        rsvp_form = InfoSessionRSVPForm(info_session=info_session, request=request, data=request.POST)
+        attendee_formset = AttendeeFormSet(data=request.POST, prefix='attendee')
 
         if rsvp_form.is_valid() and attendee_formset.is_valid():
             # Process RSVP form
             main_data = rsvp_form.cleaned_data
             
+            rsvp = InfoSessionAttendee(
+                info_session=info_session,
+                meta={}
+            )
+
+            rsvp.meta['session_id'] = str(main_data.get('events').id)
+            rsvp.meta['your_name'] = main_data.get('your_name')
+            rsvp.meta['your_email'] = main_data.get('your_email')
+            rsvp.meta['your_role'] = main_data.get('your_role')
+            rsvp.meta['highschool_name'] = main_data.get('highschool_name')
+            rsvp.meta['highschool_code'] = main_data.get('highschool_code')
+            rsvp.meta['highschool_address'] = main_data.get('highschool_address')
+            rsvp.meta['highschool_city'] = main_data.get('highschool_city')
+            rsvp.meta['highschool_state'] = main_data.get('highschool_state')
+            rsvp.meta['highschool_postal_code'] = main_data.get('highschool_postal_code')
+            rsvp.meta['highschool_phone'] = main_data.get('highschool_phone')
+            rsvp.meta['highschool_fax'] = main_data.get('highschool_fax')
+
             # Process formset data
             attendees = []
             for form in attendee_formset:
                 if form.cleaned_data and not form.cleaned_data.get('DELETE', False):
+                    del form.cleaned_data['DELETE']
+
+                    form.cleaned_data['attendance_status'] = 'rsvp'
                     attendees.append(form.cleaned_data)
 
-            # Save or send RSVP data
-            # ...
+            rsvp.meta['attendees'] = attendees
 
+            rsvp.save()
+            
             # step 2
+            return redirect('info_session:submit_info_session_courses', rsvp_id=rsvp.id)
             # return redirect('rsvp_thank_you')  # or render confirmation
 
     else:
-        rsvp_form = InfoSessionRSVPForm()
+        rsvp_form = InfoSessionRSVPForm(info_session=info_session, request=request)
         attendee_formset = AttendeeFormSet(prefix='attendee')
 
     return render(request, 'pd_event/info_session_rsvp.html', {
         'rsvp_form': rsvp_form,
+        'intro': info_session.meta.get('page_1_intro', 'Please fill out the form below to RSVP for the info session.'),
         'attendee_formset': attendee_formset,
     })
 
@@ -701,7 +785,7 @@ def detail(request, record_id):
                 }, status=400)
 
 
-        if request.POST.get('action') == 'edit_event':
+        if request.POST.get('action') == 'edit_info_session':
             form = InfoSessionForm(request, request.POST, instance=record)
 
             if form.is_valid():
@@ -713,7 +797,7 @@ def detail(request, record_id):
                     messages.SUCCESS,
                     'Successfully updated record',
                     'list-group-item-success')
-                return redirect('pd_event:event', record_id=record_id)
+                return redirect('pd_event:info_session', record_id=record_id)
         
         if request.POST.get('action') == 'edit_event_file':
             file_form = EventFileForm(record, request.POST, request.FILES)

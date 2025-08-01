@@ -497,23 +497,44 @@ class InfoSession(models.Model):
     Info Session model
     """
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    term = models.ForeignKey(
-        'cis.Term',
-        on_delete=models.PROTECT
+    name = models.CharField(
+        max_length=100,
+        blank=True,
+        null=True
     )
     sessions = models.ManyToManyField(
         'Event',
         related_name='info_sessions'
     )
+    description = models.TextField(
+        blank=True,
+        null=True
+    )
+    term = models.ForeignKey(
+        'cis.Term',
+        on_delete=models.PROTECT
+    )
     created_on = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey('cis.CustomUser', on_delete=models.PROTECT)
 
+    meta = JSONField(
+        default=dict,
+        blank=True,
+        null=True
+    )
     def __str__(self):
         return f"Info Session for {self.term}"
     
     class Meta:
         ordering = ['-term__code']
 
+    @property
+    def rsvp_url(self):
+        from cis.utils import getDomain
+        return getDomain() + str(reverse_lazy('info_session:start_rsvp', kwargs={
+            'info_session_id': self.id
+        }))
+    
     @property
     def ce_url(self):
         return reverse_lazy('pd_event:info_session', kwargs={
@@ -553,3 +574,5 @@ class InfoSessionAttendee(models.Model):
         null=True
     )
     
+    def can_edit(self):
+        return True
