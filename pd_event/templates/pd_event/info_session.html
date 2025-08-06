@@ -32,12 +32,12 @@
                     <a class="nav-link active" data-toggle="tab" href="#details">Details</a>
                 </li>
                 <li class="nav-item">
-                    <a class="nav-link" data-toggle="tab" href="#manage_attendance">Manage Attendance</a>
+                    <a class="nav-link" data-toggle="tab" href="#school_list">School List </a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item d-none">
                     <a class="nav-link" data-toggle="tab" href="#send_email">Send Email</a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item d-none">
                     <a class="nav-link" data-toggle="tab" href="#notes">Notes</a>
                 </li>
             </ul>
@@ -154,45 +154,77 @@
                 <!-- end Notes -->
 
 
-                <div class="tab-pane" id="manage_attendance">
+                <div class="tab-pane" id="school_list">
                     <div class="bg-white border border-top-0">
                         <div class="col-12 pt-3 mb-3">
 
-                            <form action="" method="post">
-                                {% csrf_token %}
-                                <div class="table-responsive">
-                                    <table style="width: 100%" class="table table-striped" id="event_attendee_list">
-                                        <thead>
-                                            <tr>
-                                                <th data-name='id' data-data='id'><input style='height: 13px;' type="checkbox" class="toggle-button"
-                                                    name="select-all" id="select-all" /></th>
-                                                <th data-name='name' data-data='name'>Name</th>
-                                                
-                                                <th>Status</th>
-                                                
-                                            </tr>
-                                        </thead>
+                            <script>
+                                jQuery(document).ready(function($) {
+                                    $('#event_attendee_list').DataTable({
 
-                                        <tfoot>
-                                            <tr>
-                                                <td colspan="6">
-                                                    <input type="button" class="btn btn-sm btn-primary btn_mark_attendance"
-                                                        data-attendance="attended" id="btn_mark_attended_selected"
-                                                        value="Mark as Attended" name="mark_attended_selected">&nbsp;
-                                                    <input type="button" class="btn btn-sm btn-secondary btn_mark_attendance"
-                                                        data-attendance="not attended"
-                                                        id="btn_mark_not_attended_selected" value="Mark as Not Attended"
-                                                        name="mark_not_attended_selected">&nbsp;
-                                                        <!-- <a href="{%url 'pd_event:export_attendee_list' record.id %}" class="btn btn-sm btn-info d-none">Export Attendee List</a>&nbsp;<input type="button" class="btn btn-sm btn-primary btn_send_pd_letter"
-                                                        data-attendance="send_pd_letter"
-                                                        id="btn_send_pd_letter" value="Send PD Letter"
-                                                        name="send_pd_letter">&nbsp; -->
-                                                </td>
-                                            </tr>
-                                        </tfoot>
-                                    </table>
-                                </div>
-                            </form>
+                                dom: 'B<"float-left mt-3 mb-3"l><"float-right mt-3"f><"row clear">rt<"row"<"col-6"i><"col-6 float-right"p>>',
+
+                                        "buttons": [
+                                    {
+                                        extend: 'csv', className: 'btn btn-sm btn-primary text-white text-light',
+                                        text: '<i class="fas fa-file-csv text-white"></i>&nbsp;CSV',
+                                        titleAttr: 'Export results to CSV' 
+                                    },
+                                    { 
+                                        extend: 'print', className: 'btn btn-sm btn-primary text-white text-light',
+                                        text: '<i class="fas fa-print text-white"></i>&nbsp;Print',
+                                        titleAttr: 'Print' 
+                                    },
+                                ],
+                                        // "processing": true,
+                                        "ajax": {
+                                            "url": "{{ attendee_hs_list }}",
+                                            "type": "GET"
+                                        },
+                                        "columns": [
+                                            {
+                                                "data": "created_on",
+                                                'render': function(data, type, row, meta) {
+                                                    return row.created_on ? row.created_on : 'N/A';
+                                                }
+                                            },
+                                            null,
+                                            {"data": "highschool_name"},
+                                            {"data": "highschool_state"},
+                                            {"data": "number_of_attendees"},
+                                            {"data": "submitted_by"},
+                                            {
+                                                'render': function(data, type, row, meta) {
+                                                    // console.log(row);
+                                                    return row.interested_courses
+                                                }
+                                            },
+                                            {
+                                                'render': function(data, type, row, meta) {
+                                                    return row.other_college_courses ? row.other_college_courses : 'N/A';
+                                                }
+                                            },
+                                        ],
+                                        "order": [[0, 'desc']],
+                                        "pageLength": 50
+                                    });
+                                });
+                            </script>
+                            <table style="width: 100%" class="table table-striped" id="event_attendee_list">
+                                <thead>
+                                    <tr>
+                                        <th data-name='created_on' data-data='created_on'>RSVP On</th>
+                                        <th data-name='selected_session' data-data='selected_session'>Selected Session</th>
+                                        <th data-name='highschool_name' data-data='highschool_name'>High School Name</th>
+                                        <th data-name='highschool_state' data-data='highschool_state'>High School State</th>
+                                        <th data-name='number_of_attendees' data-data='number_of_attendees'>Number of Attendees</th>
+                                        <th data-name='submitted_by' data-data='submitted_by'>Submitted By</th>
+                                        <th data-name='interested_courses' data-data='interested_courses'>Interested Course(s)</th>
+                                        <th data-name='other_college_courses' data-data='other_college_courses'>Other College Course(s)</th>
+                                    </tr>
+                                </thead>
+
+                            </table>
 
                             <div class="clearfix">&nbsp;</div>
                                     

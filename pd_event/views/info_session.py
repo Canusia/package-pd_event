@@ -26,7 +26,7 @@ from cis.models.teacher import (
 )
 
 from ..models import EventType, Event, EventFile, EventAttendee, InfoSession, InfoSessionNote, InfoSessionAttendee
-from ..serializers import EventSerializer, InfoSessionSerializer
+from ..serializers import EventSerializer, InfoSessionSerializer, InfoSessionAttendeeSerializer
 from ..forms import InfoSessionForm, EventFileForm, EventAttendeeFilterForm, EventEmailForm, InfoSessionCourseForm
 
 from cis.menu import cis_menu, draw_menu, FACULTY_MENU
@@ -153,6 +153,18 @@ def start_rsvp(request, info_session_id):
         'attendee_formset': attendee_formset,
     })
 
+class InfoSessionAttendeeViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = InfoSessionAttendeeSerializer
+    permission_classes = [CIS_user_only]
+
+    def get_queryset(self):
+        records = InfoSessionAttendee.objects.all()
+        if self.request.GET.get('info_session'):
+            records = records.filter(
+                info_session__id=self.request.GET.get('info_session')
+            )
+
+        return records
 
 class InfoSessionViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = InfoSessionSerializer
@@ -838,6 +850,7 @@ def detail(request, record_id):
             'file_form': file_form,
             'email_after_form': email_after_form,
             'attendee_form': None,
+            'attendee_hs_list': '/ce/events/api/info_session_hs_attendees?format=datatables&info_session=' + str(record.id),
             # 'files': record.files(),
             'email_form': email_form,
             'page_title': "Info Session",

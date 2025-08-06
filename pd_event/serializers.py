@@ -12,6 +12,28 @@ from .models import (
     InfoSession, InfoSessionNote, InfoSessionAttendee
 )
 
+class InfoSessionAttendeeSerializer(serializers.ModelSerializer):
+    created_on = serializers.DateTimeField(
+        format='%m/%d/%Y %H:%M',
+        read_only=True
+    )
+    interested_courses = serializers.ListField(allow_empty=True)
+    other_college_courses = serializers.CharField(
+        allow_blank=True,
+        allow_null=True,
+        read_only=True
+    )
+    highschool_name = serializers.CharField(read_only=True)
+    highschool_state = serializers.CharField(read_only=True)
+    submitted_by = serializers.CharField(read_only=True)
+    submitted_by_email = serializers.CharField(read_only=True)
+    selected_session = serializers.CharField(read_only=True)
+    number_of_attendees = serializers.IntegerField(read_only=True)
+
+    class Meta:
+        model = InfoSessionAttendee
+        fields = '__all__'
+
 class EventTypeSerializer(serializers.ModelSerializer):
     ce_url = serializers.CharField(
         read_only=True

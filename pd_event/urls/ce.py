@@ -21,6 +21,7 @@ from ..views.info_session import (
     add_new as add_info_session,
     # update as update_info_session,
     delete as delete_info_session,
+    InfoSessionAttendeeViewSet,
 
     start_rsvp
 )
@@ -55,7 +56,8 @@ router_viewsets = {
     'event_types': EventTypeViewSet,
     'event_venues': VenueViewSet,
     'events': EventViewSet,
-    'info_sessions': InfoSessionViewSet
+    'info_sessions': InfoSessionViewSet,
+    'info_session_hs_attendees': InfoSessionAttendeeViewSet
 }
 
 for router_key in router_viewsets.keys():

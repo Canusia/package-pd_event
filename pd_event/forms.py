@@ -820,14 +820,7 @@ class InfoSessionRSVPForm(forms.Form):
 
         return rsvp
     
-
-COLLEGE_COURSE_OPTIONS = (
-    ('1', 'Advanced Placement (AP)'),
-    ('2', 'International Baccalaureate (IB)'),
-    ('3', 'Community College'),
-    ('4', 'Another 4 year Institution'),
-    ('5', 'Other'),
-)
+from .models import COLLEGE_COURSE_OPTIONS
 
 class InfoSessionCourseForm(forms.Form):
     course = forms.CharField(
@@ -881,8 +874,9 @@ class InfoSessionCourseForm(forms.Form):
             course = Course.objects.get(pk=course_id)
 
             record.meta['interested_courses'].append({
-                'course_id': course.id,
+                'course_id': str(course.id),
                 'course_name': course.name
             })
 
+        record.save()
         return record

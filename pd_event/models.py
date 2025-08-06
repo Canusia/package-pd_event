@@ -23,6 +23,15 @@ from cis.settings.pd_event import pd_event
 from cis.utils import export_to_excel, event_file_upload_path, getDomain
 from cis.storage_backend import PrivateMediaStorage
 
+
+COLLEGE_COURSE_OPTIONS = (
+    ('1', 'Advanced Placement (AP)'),
+    ('2', 'International Baccalaureate (IB)'),
+    ('3', 'Community College'),
+    ('4', 'Another 4 year Institution'),
+    ('5', 'Other'),
+)
+
 class EventType(models.Model):
     """
     Speaker model
@@ -564,6 +573,8 @@ class InfoSessionAttendee(models.Model):
     """
     Info Session Attendee model
     """
+    created_on = models.DateTimeField(auto_now=True)
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     info_session = models.ForeignKey(
         'pd_event.InfoSession',
@@ -574,5 +585,59 @@ class InfoSessionAttendee(models.Model):
         null=True
     )
     
+    def selected_session(self):
+        from .models import Event
+        if self.meta and self.meta.get('session_id'):
+            try:
+                return Event.objects.get(
+                    id=self.meta['session_id']
+                ).name
+            except Event.DoesNotExist:
+                return None
+            
+    def interested_courses(self):
+        if self.meta and self.meta.get('interested_courses'):
+            courses = [k.get('course_name') for k in self.meta['interested_courses']]
+            return courses if isinstance(courses, list) else [courses]
+        return []
+    
+    def number_of_attendees(self):
+        if self.meta and self.meta.get('attendees'):
+            return len(self.meta['attendees'])
+        return 0
+    
+    def other_college_courses(self):
+        result = []
+
+        if self.meta and self.meta.get('other_course'):
+            for k, v in COLLEGE_COURSE_OPTIONS:
+                if k in self.meta['other_course']:
+                    result.append(v)
+
+        if self.meta and self.meta.get('other_course'):
+            result.append('Other ' + self.meta['other_course'])
+
+        return '<br>'.join(result) if result else '-'
+    
+    def highschool_name(self):
+        if self.meta and self.meta.get('highschool_name'):
+            return self.meta['highschool_name']
+        return '-'
+    
+    def highschool_state(self):
+        if self.meta and self.meta.get('highschool_state'):
+            return self.meta['highschool_state']
+        return '-'
+    
+    def submitted_by(self):
+        if self.meta and self.meta.get('your_name'):
+            return self.meta['your_name'] + "<br>" + self.meta.get('your_email', '') + "<br>" + self.meta.get('your_role', '')
+        return '-'
+    
+    def submitted_by_email(self):
+        if self.meta and self.meta.get('your_email'):
+            return self.meta['your_email']
+        return '-'
+
     def can_edit(self):
         return True
