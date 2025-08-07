@@ -17,7 +17,7 @@ from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.template import Context, Template
 from django.template.loader import get_template, render_to_string
 
-from mailer import send_mail, send_html_mail
+# from mailer import send_mail, send_html_mail
 
 from cis.settings.pd_event import pd_event
 from cis.utils import export_to_excel, event_file_upload_path, getDomain
@@ -585,6 +585,57 @@ class InfoSessionAttendee(models.Model):
         null=True
     )
     
+    def send_confirmation_email(self):
+        subject = self.info_session.meta.get('signup_confirmation_subject', 'Change Me')
+        message = self.info_session.meta.get('signup_confirmation_message', '')
+
+        message = Template(message)
+        
+        context = Context({
+            'submitted_by_name' : self.submitted_by_name(),
+            'info_session_location' : self.info_session_location,
+            'info_session_date_time' : self.info_session_date_time,
+        })
+        text_body = message.render(context)
+
+        if getattr(settings, 'DEBUG') == True:
+            to = ['kadaji@gmail.com']
+        else:
+            to = [self.submitted_by_email()]
+            # add other emails if available
+            if self.attendees:
+                for attendee in self.attendees():
+                    if attendee.get('email'):
+                        to.append(attendee.get('email'))
+
+        from_email = settings.DEFAULT_FROM_EMAIL
+        return send_mail(
+            subject,
+            text_body,
+            from_email=from_email,
+            recipient_list=to,
+            fail_silently=True
+        )
+
+    @property
+    def info_session_location(self):
+        if self.meta and self.meta.get('session_id'):
+            session = Event.objects.get(
+                id=self.meta['session_id']
+            )
+            if session.venue:
+                return f"{session.venue.name}, {session.venue.address}, {session.venue.city}, {session.venue.state} {session.venue.zip}"
+        return '-'
+    
+    @property
+    def info_session_date_time(self):
+        if self.meta and self.meta.get('session_id'):
+            session = Event.objects.get(
+                id=self.meta['session_id']
+            )
+            return f"{session.start_time_local.strftime('%m/%d/%Y %I:%M %p')}"
+        return '-'
+
     def selected_session(self):
         from .models import Event
         if self.meta and self.meta.get('session_id'):
@@ -624,6 +675,11 @@ class InfoSessionAttendee(models.Model):
             return self.meta['highschool_name']
         return '-'
     
+    def attendees(self):
+        if self.meta and self.meta.get('attendees'):
+            return self.meta['attendees']
+        return []
+    
     def highschool_state(self):
         if self.meta and self.meta.get('highschool_state'):
             return self.meta['highschool_state']
@@ -632,6 +688,11 @@ class InfoSessionAttendee(models.Model):
     def submitted_by(self):
         if self.meta and self.meta.get('your_name'):
             return self.meta['your_name'] + "<br>" + self.meta.get('your_email', '') + "<br>" + self.meta.get('your_role', '')
+        return '-'
+    
+    def submitted_by_name(self):
+        if self.meta and self.meta.get('your_name'):
+            return self.meta['your_name']
         return '-'
     
     def submitted_by_email(self):

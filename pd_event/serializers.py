@@ -29,6 +29,8 @@ class InfoSessionAttendeeSerializer(serializers.ModelSerializer):
     submitted_by_email = serializers.CharField(read_only=True)
     selected_session = serializers.CharField(read_only=True)
     number_of_attendees = serializers.IntegerField(read_only=True)
+    
+    attendees = serializers.ListField(allow_empty=True)
 
     class Meta:
         model = InfoSessionAttendee

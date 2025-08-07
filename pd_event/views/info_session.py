@@ -92,7 +92,7 @@ def submit_info_session_courses(request, rsvp_id):
     context['available_courses'] = available_courses
 
     return render(request, template, context)
-
+submit_info_session_courses.login_required = False
 
 # views.py
 def start_rsvp(request, info_session_id):
@@ -152,6 +152,7 @@ def start_rsvp(request, info_session_id):
         'intro': info_session.meta.get('page_1_intro', 'Please fill out the form below to RSVP for the info session.'),
         'attendee_formset': attendee_formset,
     })
+start_rsvp.login_required = False
 
 class InfoSessionAttendeeViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = InfoSessionAttendeeSerializer

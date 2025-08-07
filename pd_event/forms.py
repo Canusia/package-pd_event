@@ -320,6 +320,25 @@ class InfoSessionForm(ModelForm):
         help_text='This text will appear on the second page of the info session RSVP form'
     )
 
+    signup_confirmation_subject = forms.CharField(
+        widget=forms.TextInput(
+            attrs={
+                'class': 'form-control',
+            }
+        ),
+    )
+
+    signup_confirmation_message = forms.CharField(
+        widget=forms.Textarea(
+            attrs={
+                'class': 'form-control',
+            }
+        ),
+        required=False,
+        label='Signup Confirmation Message',
+        help_text='This text will appear on the signup confirmation email. You can use the following short codes: {{info_session_date_time}}, {{info_session_location}}, {{submitted_by_name}}'
+    )
+
     redirect_url = forms.CharField(
         widget=forms.TextInput,
         required=False,
@@ -378,6 +397,8 @@ class InfoSessionForm(ModelForm):
                 self.fields['page_1_intro'].initial = instance.meta.get('page_1_intro', '')
                 self.fields['page_2_intro'].initial = instance.meta.get('page_2_intro', '')
                 self.fields['redirect_url'].initial = instance.meta.get('redirect_url', '/')
+                self.fields['signup_confirmation_message'].initial = instance.meta.get('signup_confirmation_message', '/')
+                self.fields['signup_confirmation_subject'].initial = instance.meta.get('signup_confirmation_subject', '/')
 
     def save(self, commit=True, request=None, *args, **kwargs):
         record = super().save(commit=False, *args, **kwargs)
@@ -390,6 +411,9 @@ class InfoSessionForm(ModelForm):
         record.meta['page_1_intro'] = data.get('page_1_intro')
         record.meta['page_2_intro'] = data.get('page_2_intro')
         record.meta['redirect_url'] = data.get('redirect_url')
+
+        record.meta['signup_confirmation_subject'] = data.get('signup_confirmation_subject')
+        record.meta['signup_confirmation_message'] = data.get('signup_confirmation_message')
 
         record.created_by = request.user
 
@@ -587,6 +611,23 @@ class AttendeeForm(forms.Form):
         widget=forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Counselor, Teacher, etc.'})
     )
 
+from django.forms import ModelChoiceField
+
+class EventChoiceField(ModelChoiceField):
+    # make this a radio select field
+    def __init__(self, *args, **kwargs):
+        kwargs['widget'] = forms.RadioSelect  # <--- This makes it a radio group
+
+        super().__init__(*args, **kwargs)
+
+    def label_from_instance(self, obj):
+        # hyper link event.name and open the venue in google maps
+        if obj.venue:
+            return mark_safe(
+                f'{obj.venue.name} @ {datetime.datetime.strftime(obj.start_time, "%m/%d/%Y %I:%M %p")} (<a href="https://www.google.com/maps/dir/?api=1&destination={obj.venue.name},{obj.venue.address} {obj.venue.zip}" target="_blank">Get Directions</a>)'
+            )
+        return f'{obj.name} @ {obj.venue.name} ({datetime.datetime.strftime(obj.start_time, "%m/%d/%Y %I:%M %p")})'
+
 class InfoSessionRSVPForm(forms.Form):
     events = forms.ModelChoiceField(
         queryset=None,
@@ -745,10 +786,6 @@ class InfoSessionRSVPForm(forms.Form):
         widget=forms.HiddenInput
     )
 
-    captcha = ReCaptchaField(
-        label=''
-    )
-
     def __init__(self,info_session, request=None, record=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -767,7 +804,12 @@ class InfoSessionRSVPForm(forms.Form):
         self.fields['action'].initial = 'part_1'
         self.fields['highschool_country'].queryset = Location.objects.all().order_by('name')
 
-        self.fields['events'].queryset = info_session.sessions.all().order_by('start_time')
+        # use event choice field for sessions
+        self.fields['events'] = EventChoiceField(
+            label='Select the session you want to attend',
+            queryset=Event.objects.filter(
+            id__in=info_session.sessions.values_list('id', flat=True)
+        ))
 
         if record:
             self.fields['your_name'].initial = record.school_contacts['submitted_by']['name']
@@ -818,6 +860,7 @@ class InfoSessionRSVPForm(forms.Form):
         rsvp['meta']['attendees'] = attendees
         rsvp.save()
 
+        rsvp.send_confirmation_email()
         return rsvp
     
 from .models import COLLEGE_COURSE_OPTIONS
