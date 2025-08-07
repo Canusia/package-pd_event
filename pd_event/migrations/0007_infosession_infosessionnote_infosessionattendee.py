@@ -9,7 +9,7 @@ import uuid
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cis', '0171_alter_highschoolapplicationcoursereview_created_on'),
+        # ('cis', '0171_alter_highschoolapplicationcoursereview_created_on'),
         migrations.swappable_dependency(settings.AUTH_USER_MODEL),
         ('pd_event', '0006_venue_event_venue'),
     ]
