@@ -791,12 +791,12 @@ class InfoSessionRSVPForm(forms.Form):
 
         if request:
             if user_has_cis_role(request.user):
-                del self.fields['captcha']
+                # del self.fields['captcha']
 
                 self.fields['your_name'].label = 'Submitter Name'
                 self.fields['your_email'].label = 'Submitter Email'
         else:
-            del self.fields['captcha']
+            # del self.fields['captcha']
 
             self.fields['your_name'].label = 'Submitter Name'
             self.fields['your_email'].label = 'Submitter Email'
