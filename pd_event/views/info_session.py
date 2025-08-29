@@ -72,8 +72,8 @@ def submit_info_session_courses(request, rsvp_id):
                 'list-group-item-success'
             )
 
-            if record.meta.get('redirect_url'):
-                return redirect(record.meta.get('redirect_url'))
+            if record.info_session.meta.get('redirect_url'):
+                return redirect(record.info_session.meta.get('redirect_url'))
             return redirect('index')
         else:
             messages.add_message(
