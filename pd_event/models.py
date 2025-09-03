@@ -203,11 +203,14 @@ class Event(models.Model):
 
         records = []
         for attendee in attendees:
-            a = attendee.get_info()
-            if a.get('last_name'):
-                records.append(a.get('last_name', '') + ', ' + a.get('first_name'))
-            else:
-                records.append(a.get('first_name'))
+            # a = attendee.get_info()
+
+            try:
+                records.append(
+                    attendee.course_certificate.teacher_highschool.teacher.user.last_name + ', ' + attendee.course_certificate.teacher_highschool.teacher.user.first_name
+                )
+            except AttributeError:
+                pass
 
         records.sort()
 
