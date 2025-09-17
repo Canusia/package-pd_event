@@ -350,7 +350,7 @@ class InfoSessionForm(ModelForm):
     def clean_redirect_url(self):
         redirect_url = self.cleaned_data.get('redirect_url')
 
-        if not redirect_url:
+        if not redirect_url or redirect_url.strip() == '':
             return redirect_url
         
         # check if this is a valid fully qualified URL
