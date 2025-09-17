@@ -10,6 +10,7 @@ from django.utils import timezone
 
 from django.template import Template, Context
 from django.template.loader import get_template
+from django.utils.safestring import mark_safe
 
 from rest_framework import viewsets
 from rest_framework.decorators import api_view
@@ -138,7 +139,8 @@ def start_rsvp(request, info_session_id):
             rsvp.meta['attendees'] = attendees
 
             rsvp.save()
-            
+            rsvp.send_confirmation_email()
+
             # step 2
             return redirect('info_session:submit_info_session_courses', rsvp_id=rsvp.id)
             # return redirect('rsvp_thank_you')  # or render confirmation
@@ -851,7 +853,7 @@ def detail(request, record_id):
             'file_form': file_form,
             'email_after_form': email_after_form,
             'attendee_form': None,
-            'attendee_hs_list': '/ce/events/api/info_session_hs_attendees?format=datatables&info_session=' + str(record.id),
+            'attendee_hs_list': mark_safe('/ce/events/api/info_session_hs_attendees?format=datatables&info_session=' + str(record.id)),
             # 'files': record.files(),
             'email_form': email_form,
             'page_title': "Info Session",
