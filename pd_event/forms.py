@@ -626,7 +626,7 @@ class EventChoiceField(ModelChoiceField):
             return mark_safe(
                 f'{obj.venue.name} @ {datetime.datetime.strftime(obj.start_time, "%m/%d/%Y %I:%M %p")} (<a href="https://www.google.com/maps/dir/?api=1&destination={obj.venue.name},{obj.venue.address} {obj.venue.zip}" target="_blank">Get Directions</a>)'
             )
-        return f'{obj.name} @ {obj.venue.name} ({datetime.datetime.strftime(make_aware(obj.start_time), "%m/%d/%Y %I:%M %p")})'
+        return f'{obj.name} @ {obj.venue.name} ({make_aware(datetime.datetime.strftime(obj.start_time, "%m/%d/%Y %I:%M %p"))})'
 
 class InfoSessionRSVPForm(forms.Form):
     events = forms.ModelChoiceField(
