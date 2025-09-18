@@ -612,7 +612,7 @@ class AttendeeForm(forms.Form):
     )
 
 from django.forms import ModelChoiceField
-
+from django.utils.timezone import make_aware
 class EventChoiceField(ModelChoiceField):
     # make this a radio select field
     def __init__(self, *args, **kwargs):
@@ -626,7 +626,7 @@ class EventChoiceField(ModelChoiceField):
             return mark_safe(
                 f'{obj.venue.name} @ {datetime.datetime.strftime(obj.start_time, "%m/%d/%Y %I:%M %p")} (<a href="https://www.google.com/maps/dir/?api=1&destination={obj.venue.name},{obj.venue.address} {obj.venue.zip}" target="_blank">Get Directions</a>)'
             )
-        return f'{obj.name} @ {obj.venue.name} ({datetime.datetime.strftime(obj.start_time, "%m/%d/%Y %I:%M %p")})'
+        return f'{obj.name} @ {obj.venue.name} ({datetime.datetime.strftime(make_aware(obj.start_time), "%m/%d/%Y %I:%M %p")})'
 
 class InfoSessionRSVPForm(forms.Form):
     events = forms.ModelChoiceField(
