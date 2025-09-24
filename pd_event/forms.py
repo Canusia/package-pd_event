@@ -425,7 +425,82 @@ class InfoSessionForm(ModelForm):
             
         return record
 
+class EventReportForm(forms.Form):
+    action = forms.CharField(
+        widget=forms.HiddenInput
+    )
 
+    event_agenda = forms.CharField(
+        widget=forms.Textarea(
+            attrs={
+                'class': 'form-control',
+                'rows': 5
+            }
+        ),
+        required=False,
+        label='Event agenda',
+        help_text=''
+    )
+
+    event_summary = forms.CharField(
+        widget=forms.Textarea(
+            attrs={
+                'class': 'form-control',
+                'rows': 5
+            }
+        ),
+        required=False,
+        label='Brief event summary',
+        help_text='Describe any key moments that shaped the outcome'
+    )
+
+    event_questions = forms.CharField(
+        widget=forms.Textarea(
+            attrs={
+                'class': 'form-control',
+                'rows': 5
+            }
+        ),
+        required=False,
+        label='Questions/concerns that arose',
+        help_text=''
+    )
+
+    event_future_changes = forms.CharField(
+        widget=forms.Textarea(
+            attrs={
+                'class': 'form-control',
+                'rows': 5
+            }
+        ),
+        required=False,
+        label='When you run this next time, what are the 1 - 3 changes you\'d make and why?',
+        help_text=''
+    )
+
+    def __init__(self, record, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['action'].initial = 'edit_event_report'
+
+        self.fields['event_agenda'].initial = record.meta.get('event_agenda', '')
+        self.fields['event_summary'].initial = record.meta.get('event_summary', '')
+        self.fields['event_questions'].initial = record.meta.get('event_questions', '')
+        self.fields['event_future_changes'].initial = record.meta.get('event_future_changes', '')
+
+    def save(self, record, commit=True, request=None):
+        data = self.cleaned_data
+        
+        if not record.meta:
+            record.meta = {}
+        record.meta['event_agenda'] = data.get('event_agenda')
+        record.meta['event_summary'] = data.get('event_summary')
+        record.meta['event_questions'] = data.get('event_questions')
+        record.meta['event_future_changes'] = data.get('event_future_changes')
+
+        if commit:
+            record.save()
+        return record
+    
 class EventForm(ModelForm):
     name = forms.CharField(
         label='Event Name',

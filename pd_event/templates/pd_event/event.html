@@ -38,6 +38,9 @@
                     <a class="nav-link" data-toggle="tab" href="#guest_list">Manage Guest List</a>
                 </li>
                 <li class="nav-item">
+                    <a class="nav-link" data-toggle="tab" href="#event_report">Event Report</a>
+                </li>
+                <li class="nav-item">
                     <a class="nav-link" data-toggle="tab" href="#manage_attendance">Manage Attendance</a>
                 </li>
                 <li class="nav-item">
@@ -103,6 +106,27 @@
                                             {{ form | crispy }}
                                             <input type="submit" class="btn btn-primary btn-sm" value="Update">&nbsp;
                                             <input type="button" value="Delete" class="btn btn-danger btn-sm delete float-right pull-right">
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <!-- end tab #details -->
+
+                <div class="tab-pane" id="event_report">
+                    <div class="bg-white border border-top-0">
+                        <div class="col-12 pt-3 mb-3">
+                            <div class="">
+                                <div class="">
+                                    <div class="">
+                                        
+                                        {{form.media}}
+                                        <form action="" method="post">
+                                            {% csrf_token %}
+                                            {{ event_report_form | crispy }}
+                                            <input type="submit" class="btn btn-primary btn-sm" value="Update">
                                         </form>
                                     </div>
                                 </div>

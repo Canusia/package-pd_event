@@ -28,7 +28,7 @@ from cis.models.teacher import (
 
 from ..models import EventType, Event, EventFile, EventAttendee, InfoSession, InfoSessionNote, InfoSessionAttendee
 from ..serializers import EventSerializer, InfoSessionSerializer, InfoSessionAttendeeSerializer
-from ..forms import InfoSessionForm, EventFileForm, EventAttendeeFilterForm, EventEmailForm, InfoSessionCourseForm
+from ..forms import InfoSessionForm, EventFileForm, EventAttendeeFilterForm, EventEmailForm, InfoSessionCourseForm, EventReportForm
 
 from cis.menu import cis_menu, draw_menu, FACULTY_MENU
 
@@ -781,6 +781,8 @@ def detail(request, record_id):
     email_form = EventEmailForm(record)
     email_after_form = EventEmailForm(record, 'send_email_after_event')
 
+    event_report_form = EventReportForm(record)
+
     if request.method == 'POST':
         if request.POST.get('action', '').startswith('send_email'):
             email_form = EventEmailForm(record, request.POST.get('action'), request.POST)
@@ -800,6 +802,21 @@ def detail(request, record_id):
                 }, status=400)
 
 
+
+        if request.POST.get('action') == 'edit_event_report':
+            form = EventReportForm(record, data=request.POST)
+
+            if form.is_valid():
+                record = form.save(record, commit=True, request=request)
+                # record.save()
+
+                messages.add_message(
+                    request,
+                    messages.SUCCESS,
+                    'Successfully saved report',
+                    'list-group-item-success')
+                return redirect('pd_event:info_session', record_id=record_id)
+        
         if request.POST.get('action') == 'edit_info_session':
             form = InfoSessionForm(request, request.POST, instance=record)
 
@@ -852,6 +869,7 @@ def detail(request, record_id):
             'form': form,
             'file_form': file_form,
             'email_after_form': email_after_form,
+            'event_report_form': event_report_form,
             'attendee_form': None,
             'attendee_hs_list': mark_safe('/ce/events/api/info_session_hs_attendees?format=datatables&info_session=' + str(record.id)),
             # 'files': record.files(),

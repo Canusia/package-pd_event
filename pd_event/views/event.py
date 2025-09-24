@@ -27,7 +27,7 @@ from cis.models.teacher import (
 
 from ..models import EventType, Event, EventFile, EventAttendee
 from ..serializers import EventSerializer
-from ..forms import EventForm, EventFileForm, EventAttendeeFilterForm, EventEmailForm
+from ..forms import EventForm, EventFileForm, EventAttendeeFilterForm, EventEmailForm, EventReportForm
 
 from cis.menu import cis_menu, draw_menu, FACULTY_MENU
 
@@ -667,6 +667,8 @@ def detail(request, record_id):
     email_form = EventEmailForm(record)
     email_after_form = EventEmailForm(record, 'send_email_after_event')
 
+    event_report_form = EventReportForm(record)
+
     if request.method == 'POST':
         if request.POST.get('action', '').startswith('send_email'):
             email_form = EventEmailForm(record, request.POST.get('action'), request.POST)
@@ -697,6 +699,21 @@ def detail(request, record_id):
                     request,
                     messages.SUCCESS,
                     'Successfully updated record',
+                    'list-group-item-success')
+                return redirect('pd_event:event', record_id=record_id)
+        
+
+        if request.POST.get('action') == 'edit_event_report':
+            form = EventReportForm(record, data=request.POST)
+
+            if form.is_valid():
+                record = form.save(record, commit=True, request=request)
+                # record.save()
+
+                messages.add_message(
+                    request,
+                    messages.SUCCESS,
+                    'Successfully saved report',
                     'list-group-item-success')
                 return redirect('pd_event:event', record_id=record_id)
         
@@ -736,6 +753,7 @@ def detail(request, record_id):
         template, {
             'form': form,
             'file_form': file_form,
+            'event_report_form': event_report_form,
             'email_after_form': email_after_form,
             'attendee_form': EventAttendeeFilterForm(event=record),
             'files': record.files(),
