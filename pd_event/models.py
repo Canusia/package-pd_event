@@ -17,7 +17,7 @@ from django.core.mail import EmailMessage, EmailMultiAlternatives
 from django.template import Context, Template
 from django.template.loader import get_template, render_to_string
 
-# from mailer import send_mail, send_html_mail
+from mailer import send_mail, send_html_mail
 
 from cis.settings.pd_event import pd_event
 from cis.utils import export_to_excel, event_file_upload_path, getDomain

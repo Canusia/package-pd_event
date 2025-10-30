@@ -260,14 +260,17 @@ class EventAttendeeFilterForm(forms.Form):
     def __init__(self, event, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from cis.models.highschool import HighSchool
-        categories = HighSchool.objects.values('category').order_by('category')
+        try:
+            categories = HighSchool.objects.values('category').order_by('category')
 
-        category_choices = []
-        for cat in categories:
-            if ((cat['category'], cat['category']) not in category_choices):
-                category_choices.append(
-                    (cat['category'], cat['category'])
-                )
+            category_choices = []
+            for cat in categories:
+                if ((cat['category'], cat['category']) not in category_choices):
+                    category_choices.append(
+                        (cat['category'], cat['category'])
+                    )
+        except:
+            category_choices = [(   '', '--- No Categories Available ---')]
         self.fields['highschool_category'].choices = category_choices
 
         self.fields['course'].queryset = event.courses.all().order_by('name')
