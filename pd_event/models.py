@@ -379,6 +379,7 @@ class EventAttendee(models.Model):
         default='instructor'
     )
     
+    ctle_signature = models.TextField(blank=True, null=True)
     meta = JSONField(
         blank=True,
         null=True
@@ -408,6 +409,7 @@ class EventAttendee(models.Model):
             'pd_note' : self.meta.get('note'),
             'delivery_mode' : self.event.delivery_mode,
             'pd_letter_url' : self.pd_url,
+            'ctle_signature_url' : self.ctle_signature_url,
             'description' : self.event.description
         })
         text_body = message.render(context)
@@ -443,6 +445,11 @@ class EventAttendee(models.Model):
     @property
     def pd_url(self):
         return getDomain() + str(reverse_lazy('pd_event:pd_letter', kwargs={
+            'attendance_id': self.id}))
+
+    @property
+    def ctle_signature_url(self):
+        return getDomain() + str(reverse_lazy('pd_event:ctle_signature', kwargs={
             'attendance_id': self.id}))
 
     def get_info(self):

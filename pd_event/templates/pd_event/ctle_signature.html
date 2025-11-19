@@ -1,0 +1,112 @@
+{% extends "cis/base.html" %}
+
+{% load static %}
+{% load templatehelpers %}
+{% load crispy_forms_tags %}
+
+{% block title %}CTLE Signature{% endblock %}
+{% block body %}
+
+  <script>
+    var address_lookup = "{% url 'student:address_lookup' %}"
+  </script>
+
+<style>
+
+.invalid-feedback {
+  display: block;
+}
+    .bg {
+        background-image: url("{% static 'images/bg.jpg'%}");
+        height: 100%;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-size: cover;
+    }
+
+</style>
+
+<script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+
+<link rel="stylesheet" href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/smoothness/jquery-ui.css">
+
+<link rel="stylesheet"
+    href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.8.0/css/bootstrap-datepicker.standalone.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap-datepicker/1.8.0/js/bootstrap-datepicker.min.js"></script>
+
+<link rel="stylesheet" href="https://unpkg.com/multiple-select@1.5.2/dist/multiple-select.min.css">
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-validate/1.19.0/jquery.validate.min.js"
+integrity="sha256-bu/BP02YMudBc96kI7yklc639Mu4iKGUNNcam8D2nLc=" crossorigin="anonymous"></script>
+
+<!-- Latest compiled and minified JavaScript -->
+<script src="https://unpkg.com/multiple-select@1.5.2/dist/multiple-select.min.js"></script>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-throttle-debounce/1.1/jquery.ba-throttle-debounce.min.js" integrity="sha512-JZSo0h5TONFYmyLMqp8k4oPhuo6yNk9mHM+FY50aBjpypfofqtEWsAgRDQm94ImLCzSaHeqNvYuD9382CEn2zw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+<main role="main" id="content">
+
+    <div class="py-3">
+        <div class="container">
+
+            <div class="bg-light">
+                <div class="ro">
+                    <div class="col-12">
+                        {{signup_intro|safe}}
+                    </div>
+                </div>
+
+                {% if False %}
+                    {{window_close_notice|safe}}
+                {% else %}
+                <div class="ro">
+                    {% if messages %}
+                        <div class="col-md-12">
+                            <ul class="messages list-group">
+                                {% for message in messages %}
+                                <li{% if message.tags %} class="list-group-item {{ message.tags }}" {% endif %}>
+                                    {{ message }}</li>
+                                    {% endfor %}
+                            </ul>
+                        </div>
+                    {% endif %}
+
+
+                            {% if not attendee.ctle_signature %}
+                    <div class="col-12">
+                        {{form.media}}
+                        <div class="clearfix">&nbsp;</div>
+                        <p class="alert alert-info">
+                            Syracuse University is an approved sponsor of Continuing Teacher and Leader Education (CTLE) in New York state pursuant to section 80-6 of the Regulations of the Commissioner of Education. The term of approval is July 1, 2016 through June 30, 2021.<br></br>
+
+Project Advance will ensure that the seminar/class meets state education guidelines to be offered as CTLE and will indicate the number of clock hours associated with the class.<br></br>
+
+A non-credit seminar/class offered through Project Advance has NO credit hours and cannot be used to fulfill any degree requirements.
+This seminar/class may qualify for Continuing Education Units (CEUs), used to renew some professional licenses or allow professionals to keep up on the latest information in their field.
+                        </p>
+                        <div class="card bg-white ">
+                            <div class="p3">
+                                {{form.media}}
+
+                            <form action="" method="post" class="p-3" autocomplete="off">
+                                {% csrf_token %}
+                                {{ form | crispy }}
+                                <input type="submit" value="Submit" name="submit_create_application"
+                                    class="btn btn-primary submit" />
+                            </form>
+                            </div>
+                        </div>
+                    </div> <!-- end col-md-12 -->
+                    {% else %}
+                    <p class="m-3 alert alert-info">The CTLE signature has already been submitted.</p>
+                            {% endif %}
+
+                </div> <!-- end row -->
+
+                <div class="clearfix">&nbsp;</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</main>
+{% endblock %}

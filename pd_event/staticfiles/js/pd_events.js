@@ -2,6 +2,7 @@
 jQuery(document).ready(function ($) {
 
     $('form.frm_ajax').submit(function (event) {
+        
         var blocked_element = $(this).parent()
         // $(blocked_element).block();
         event.preventDefault()

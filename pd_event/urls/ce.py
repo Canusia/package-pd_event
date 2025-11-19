@@ -42,6 +42,7 @@ from ..views.event import (
     get_courses,
     EventViewSet,
     pd_letter,
+    ctle_signature,
     email_pd_letter,
     event_signin_sheet,
     send_reminder,
@@ -99,6 +100,9 @@ urlpatterns = [
     path('event/<uuid:record_id>/export_signin_sheet/', event_signin_sheet, name='export_signin_sheet'),
     path('event/remove_upload/<uuid:record_id>', remove_upload, name='remove_upload'),
     path('event/pd_letter/<uuid:attendance_id>', pd_letter, name='pd_letter'),
+    
+    path('event/ctle_signature/<uuid:attendance_id>', ctle_signature, name='ctle_signature'),
+
     path('event/email_pd_letter/<uuid:record_id>', email_pd_letter, name='email_pd_letter'),
     path('event/<uuid:record_id>/attendee/add_new/', add_attendee, name='add_attendee'),
     path('event/<uuid:record_id>/attendee/remove/', remove_attendee, name='remove_attendee'),

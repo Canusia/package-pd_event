@@ -27,7 +27,7 @@ from cis.models.teacher import (
 
 from ..models import EventType, Event, EventFile, EventAttendee
 from ..serializers import EventSerializer
-from ..forms import EventForm, EventFileForm, EventAttendeeFilterForm, EventEmailForm, EventReportForm
+from ..forms import EventForm, EventFileForm, EventAttendeeFilterForm, EventEmailForm, EventReportForm, CTLESignatureForm
 
 from cis.menu import cis_menu, draw_menu, FACULTY_MENU
 
@@ -178,6 +178,35 @@ def event_signin_sheet(request, record_id):
 
     return response
 event_signin_sheet.login_required = False
+
+def ctle_signature(request, attendance_id):    
+    attendee = get_object_or_404(EventAttendee, pk=attendance_id)
+
+    form = CTLESignatureForm(attendee=attendee)
+
+    if request.method == 'POST':
+        form = CTLESignatureForm(attendee, request.POST)
+
+        if form.is_valid():
+            form.save(request, attendee)
+
+            messages.add_message(
+                request,
+                messages.SUCCESS,
+                'Successfully submitted CTLE signature. You may now close this window.',
+                'list-group-item-success')
+            return redirect('pd_event:ctle_signature', attendance_id=attendance_id)
+        
+    template = 'pd_event/ctle_signature.html'
+    return render(
+        request,
+        template, {
+            'page_title': 'CTLE Letter',
+            'form': form,
+            'attendee': attendee
+        }
+    )
+ctle_signature.login_required = False
 
 def pd_letter(request, attendance_id):
     import pdfkit

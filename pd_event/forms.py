@@ -54,7 +54,7 @@ class EventEmailForm(forms.Form):
     short_codes = FFields.ReadOnlyField(
         required=False,
         label=mark_safe(
-            '<p class="alert">Use the form to email event guests.<br><br>Customize the subject and message with the following short codes. {{event_description}}, {{event_start_date_time}}, {{event_end_date_time}}, {{event_term}}, {{attendee_first_name}}, {{attendee_last_name}}, {{courses_name}}</p>'
+            '<p class="alert">Use the form to email event guests.<br><br>Customize the subject and message with the following short codes. {{event_description}}, {{event_start_date_time}}, {{event_end_date_time}}, {{event_term}}, {{attendee_first_name}}, {{attendee_last_name}}, {{courses_name}}, {{event_name}}, {{event_location}}</p>'
         ),
         widget=FFields.LongLabelWidget(
             attrs={
@@ -98,7 +98,7 @@ class EventEmailForm(forms.Form):
             del self.fields['email_to']
         else:
             self.fields['short_codes'].label = mark_safe(
-                '<p class="card p-3">Customize the subject and message with the following short codes. {{event_description}}, {{event_start_date_time}}, {{event_end_date_time}}, {{event_term}}, {{attendee_first_name}}, {{attendee_last_name}}.<br><br>If sending to attendees {{pd_note}}, {{pd_letter_url}}.</p>'
+                '<p class="card p-3">Customize the subject and message with the following short codes. {{event_name}}, {{event_location}}, {{event_description}}, {{event_start_date_time}}, {{event_end_date_time}}, {{event_term}}, {{attendee_first_name}}, {{attendee_last_name}}.<br><br>If sending to attendees {{pd_note}}, {{pd_letter_url}}, {{ctle_signature_url}}.</p><p class="card p-3">To Whom It May Concern:<br><br>This email is to certify that {{attendee_first_name}} {{attendee_last_name}} attended the Syracuse University Project Advance Professional development Seminar on {{event_start_date_time}} at {{event_location}}. You can download the attendance confirmation letter at {{pd_letter_url}}.<br><br>This seminar workshop is required for all Project Advance teachers, regardless of teaching status, in order to retain their certification to teach an SU course through Project Advance. If you would like to have the CTLE credit for the seminar appended to your Syracuse University transcript, please click on the following link ( {{ctle_signature_url}} ) and add your signature as directed.<br><br>Please call or email me if you have any questions or if you require any additional information regarding the event.<br><br>Sincerely,<br><br></p>'
             )
         
     def save(self, request, event):
@@ -119,11 +119,14 @@ class EventEmailForm(forms.Form):
             if attendee.type == 'highschool':
                 return False
 
+            print(attendee)
             message = Template(data.get('message', ''))
             subject = Template(data.get('subject', ''))
 
             attendee_info = attendee.get_info()
             context = Context({
+                'event_name' : event.name,
+                'event_location' : event.venue.name if event.venue else '',
                 'attendee_first_name' : attendee.course_certificate.teacher_highschool.teacher.user.first_name,
                 'attendee_last_name' : attendee.course_certificate.teacher_highschool.teacher.user.last_name,
                 'courses_name' : event.sexy_courses,
@@ -133,6 +136,7 @@ class EventEmailForm(forms.Form):
                 'description' : event.description,
                 'pd_letter_url' : attendee.pd_url,  
                 'pd_note' : attendee.meta.get('note'),
+                'ctle_signature_url' : attendee.ctle_signature_url,
             })
 
             if data.get('email_to') == 'to_attendees':
@@ -260,8 +264,10 @@ class EventAttendeeFilterForm(forms.Form):
     def __init__(self, event, *args, **kwargs):
         super().__init__(*args, **kwargs)
         from cis.models.highschool import HighSchool
-        categories = HighSchool.objects.values('category').order_by('category')
-
+        try:
+            categories = HighSchool.objects.values('category').order_by('category')
+        except:
+            categories = []
         category_choices = []
         for cat in categories:
             if ((cat['category'], cat['category']) not in category_choices):
@@ -424,7 +430,49 @@ class InfoSessionForm(ModelForm):
             record.sessions.add(session)
             
         return record
+    
+class CTLESignatureForm(forms.Form):
+    action = forms.CharField(
+        widget=forms.HiddenInput
+    )
 
+    attendee_info = FFields.ReadOnlyField(
+        required=False,
+        label='',
+        widget=FFields.LongLabelWidget(
+            attrs={
+                'class':'border-0 bg-light h-100'
+            }
+        )
+    )
+
+    student_signature = FFields.SignatureField(
+        label='Signature',
+        required=True,
+        error_messages={
+            'required':'Please sign in the box'
+        },
+        widget=FFields.SignatureWidget
+    )
+
+    def __init__(self, attendee, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['action'].initial = 'ctle_signature'
+
+        attendee_info = f'''Attendee Name: {attendee.course_certificate.teacher_highschool.teacher.user.get_full_name()}<br>Attendee SUID: {attendee.course_certificate.teacher_highschool.teacher.user.psid}'''
+
+        self.fields['attendee_info'].initial = mark_safe(attendee_info)
+
+    def save(self, request, attendee, commit=True):
+        data = self.cleaned_data
+
+        attendee.ctle_signature = data.get('student_signature')
+        attendee.meta['ctle_signature_signed_on'] = datetime.datetime.now().strftime('%m/%d/%Y')
+
+        if commit:
+            attendee.save()
+        return attendee
+    
 class EventReportForm(forms.Form):
     action = forms.CharField(
         widget=forms.HiddenInput
@@ -530,6 +578,20 @@ class EventForm(ModelForm):
         widget=forms.TextInput(attrs={'class':'col-md-6 col-sm-12 datetime_picker'}),
     )
 
+    ctle_course_name = forms.CharField(
+        label='CTLE Course Name',
+        max_length=255,
+        required=False,
+        widget=forms.TextInput(attrs={'class':'col-md-6 col-sm-12'}),
+        help_text='If this event is eligible for CTLE credit, enter the course name here.'
+    )
+    
+    ctle_registration_deadline = forms.CharField(
+        label='Registration Deadline for CTLE Credit',
+        help_text='Eg: 10/10/2020 01:30 PM',
+        widget=forms.TextInput(attrs={'class':'col-md-6 col-sm-12 datetime_picker'}),
+    )
+
     class Media:
         js = [
             'js/pd_event.js',
@@ -545,6 +607,9 @@ class EventForm(ModelForm):
             try:
                 self.fields['start_time'].initial = timezone.localtime(instance.start_time).strftime('%m/%d/%Y %I:%M %p')
                 self.fields['end_time'].initial = timezone.localtime(instance.end_time).strftime('%m/%d/%Y %I:%M %p')
+
+                self.fields['ctle_registration_deadline'].initial = instance.meta.get('ctle_registration_deadline', '')
+                self.fields['ctle_course_name'].initial = instance.meta.get('ctle_course_name', '')
             except:
                 ...
 
@@ -592,8 +657,6 @@ class EventForm(ModelForm):
             'venue',
             'term',
             'delivery_mode',
-            # 'start_time',
-            # 'end_time',
             'pd_hour',
             'cost_per_attendee',
             'description',
@@ -604,8 +667,6 @@ class EventForm(ModelForm):
             # 'name': 'CIS Events DB ID'
         }
         help_texts = {
-            # 'start_time': 'As mm/dd/yyyy hh:mm',
-            # 'end_time': 'As mm/dd/yyyy hh:mm',
             'description': 'This text will appear in the PD letter.'
         }
 
@@ -652,6 +713,13 @@ class EventForm(ModelForm):
 
         record.save()
         record.courses.clear()
+
+        if not record.meta:
+            record.meta = {}
+
+        record.meta['ctle_course_name'] = data.get('ctle_course_name')
+        record.meta['ctle_registration_deadline'] = data.get('ctle_registration_deadline')
+        record.save()
 
         for course in data.get('courses'):
             record.courses.add(course)
