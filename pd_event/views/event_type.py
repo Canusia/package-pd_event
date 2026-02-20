@@ -140,7 +140,7 @@ def index(request):
             'page_title': 'Event Types',
             'urls': {
                 'add_new': 'pd_event:event_type_add_new',
-                'details_prefix': '/ce/cis/events/event_type/'
+                'details_prefix': '/ce/events/event_type/'
             },
             'menu': menu,
             'api_url': '/ce/events/api/event_types?format=datatables'
