@@ -30,7 +30,7 @@ from cis.validators import validate_html_short_code, validate_cron
 from django_ckeditor_5.widgets import CKEditor5Widget as CKEditorWidget
 
 from cis.utils import user_has_cis_role, user_has_faculty_role
-from captcha.fields import ReCaptchaField
+from django_recaptcha.fields import ReCaptchaField
 from mailer import send_mail, send_html_mail
 
 class EventEmailForm(forms.Form):
