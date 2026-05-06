@@ -225,7 +225,7 @@ class EventAttendeeFilterForm(forms.Form):
 
     instructor_course_status = forms.MultipleChoiceField(
         choices=TeacherCourseCertificate.STATUS_OPTIONS,
-        required=False,
+        required=True,
         label='Instructor Course Status',
         widget=forms.CheckboxSelectMultiple
     )
