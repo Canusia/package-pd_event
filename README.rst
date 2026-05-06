@@ -39,6 +39,37 @@ In ``myce/urls.py``, pick the namespace based on layout::
         path('instructor/events/', include(f'{_pde}.urls.instructor')),
     ]
 
+In Settings -> Menu add the menu items::
+
+    {
+        "type":"nav-item",
+        "icon":"fas fa-fw fa-calendar-check",
+        "label":"PD Events",
+        "name":"pd_event",
+        "sub_menu":[
+            {
+            "label":"Events",
+            "name":"events",
+            "url":"pd_event:events"
+            },
+            {
+            "label":"Event Types",
+            "name":"event_types",
+            "url":"pd_event:event_types"
+            }
+        ]
+    },
+
+For the instructor portal sidebar (separate menu setting), add::
+
+    {
+        "type":"nav-item",
+        "icon":"fas fa-fw fa-calendar-check",
+        "label":"My PD Events",
+        "name":"pd_event_instructor",
+        "url":"pd_event_instructor:index"
+    },
+
 Routes
 ------
 
