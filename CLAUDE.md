@@ -25,6 +25,13 @@ Manages Professional Development events and high school information sessions. Tr
 **Faculty Routes** (`/faculty/events/`):
 - Limited view for faculty-related events
 
+**Instructor Routes** (`/instructor/events/`):
+- Read-only list of events the logged-in instructor is a guest of
+- DRF-backed (`InstructorEventAttendeeViewSet` + `InstructorEventAttendeeSerializer`) with `rest_framework_datatables` server-side mode
+- PD letter download exposed only when `meta['attendance_status'] == 'attended'`
+- Namespace: `pd_event_instructor` (`:index` for the page, `:attendees-list` for the API)
+- Permission: `INSTRUCTOR_user_only` on the API; queryset filtered by `request.user.teacher`
+
 **Public Routes** (`/info_session/`):
 - `start_rsvp/<id>/` - Public RSVP form
 - `submit_info_session_courses/<id>/` - Course interest selection
