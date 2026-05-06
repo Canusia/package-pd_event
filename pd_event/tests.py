@@ -104,3 +104,26 @@ class InstructorEventListTests(TestCase):
         names = [row['event']['name'] for row in results]
         self.assertIn('Mine', names)
         self.assertNotIn('Theirs', names)
+
+    def test_pd_letter_url_only_for_attended(self):
+        now = timezone.now()
+        evt2 = Event.objects.create(
+            event_type=self.event_type, term=self.term,
+            name='Skipped', start_time=now, end_time=now + timedelta(hours=1),
+            created_by=self.user,
+        )
+        skipped = EventAttendee.objects.create(
+            event=evt2, course_certificate=self.cert, type='instructor',
+            meta={'attendance_status': 'not attended'},
+        )
+
+        self.client.force_login(self.user)
+        results = self._list()
+        by_id = {row['id']: row for row in results}
+
+        self.assertIsNotNone(by_id[str(self.my_attendee.id)]['pd_letter_url'])
+        self.assertIn(
+            f'/pd_letter/{self.my_attendee.id}',
+            by_id[str(self.my_attendee.id)]['pd_letter_url'],
+        )
+        self.assertIsNone(by_id[str(skipped.id)]['pd_letter_url'])
