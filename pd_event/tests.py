@@ -127,3 +127,22 @@ class InstructorEventListTests(TestCase):
             by_id[str(self.my_attendee.id)]['pd_letter_url'],
         )
         self.assertIsNone(by_id[str(skipped.id)]['pd_letter_url'])
+
+    def test_api_blocks_non_instructor(self):
+        non_instr = CustomUser.objects.create_user(
+            username='admin@example.com', email='admin@example.com',
+            password='x', first_name='A', last_name='Z',
+        )
+        self.client.force_login(non_instr)
+        url = reverse('pd_event_instructor:attendees-list')
+        resp = self.client.get(url, HTTP_ACCEPT='application/json')
+        self.assertIn(resp.status_code, (401, 403))
+
+    def test_page_redirects_anonymous(self):
+        resp = self.client.get(reverse('pd_event_instructor:index'))
+        self.assertEqual(resp.status_code, 302)
+        location = resp['Location'].lower()
+        self.assertTrue(
+            'login' in location or 'next=' in location,
+            f"Expected a login redirect, got: {resp['Location']}",
+        )
