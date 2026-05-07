@@ -1,0 +1,63 @@
+{% extends "instructor/base_instructor.html" %}
+{% load static %}
+
+{% block content %}
+<div class="card">
+  <div class="card-body">
+    <table id="instructor-events-table" class="table table-striped" style="width:100%">
+      <thead>
+        <tr>
+          <th>Term</th>
+          <th>Event</th>
+          <th>Type</th>
+          <th>Start</th>
+          <th>End</th>
+          <th>Course</th>
+          <th>Attendance</th>
+          <th>PD Letter</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+$(function () {
+  $('#instructor-events-table').DataTable({
+    ajax: '{{ api_url }}',
+    serverSide: true,
+    processing: true,
+    searching: true,
+    order: [[0, 'desc']],
+    lengthMenu: [25, 50, 100],
+    columns: [
+      { data: 'event.term', name: 'event.term.label' },
+      { data: 'event.name' },
+      { data: 'event.event_type' },
+      { data: 'event.start_time' },
+      { data: 'event.end_time' },
+      { data: 'course' },
+      {
+        data: 'attendance_status',
+        render: function (val) {
+          if (!val) return '<span class="text-muted">-</span>';
+          return val.charAt(0).toUpperCase() + val.slice(1);
+        }
+      },
+      {
+        data: 'pd_letter_url',
+        orderable: false,
+        searchable: false,
+        render: function (url) {
+          if (url) {
+            return '<a class="btn btn-sm btn-outline-primary" target="_blank" href="' + url + '">Download</a>';
+          }
+          return '<span class="text-muted small">Not available</span>';
+        }
+      }
+    ]
+  });
+});
+</script>
+{% endblock %}
