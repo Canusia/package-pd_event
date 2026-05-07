@@ -4,6 +4,7 @@ from django.urls import reverse
 
 from rest_framework import viewsets
 
+from cis.menu import INSTRUCTOR_MENU, draw_menu
 from cis.models.teacher import Teacher
 from cis.utils import INSTRUCTOR_user_only
 
@@ -13,8 +14,10 @@ from ..serializers import InstructorEventAttendeeSerializer
 
 @login_required
 def index(request):
+    menu = draw_menu(INSTRUCTOR_MENU, 'pd_event_instructor', '', 'instructor')
     api_url = reverse('pd_event_instructor:attendees-list') + '?format=datatables'
     return render(request, 'pd_event/instructor-event-list.html', {
+        'menu': menu,
         'page_name': 'My PD Events',
         'api_url': api_url,
     })
