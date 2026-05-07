@@ -22,3 +22,14 @@ In myce.urls.py
 - path('faculty/events/', include('pd_event.urls.faculty')),
 
 
+Instructor portal
+-----------------
+
+This release adds an instructor-facing event list at
+``pd_event.urls.instructor``. To enable it in a tenant project, include the
+URL module under the namespace ``pd_event_instructor``::
+
+    path('instructor/events/', include('pd_event.urls.instructor', namespace='pd_event_instructor')),
+
+The view requires ``cis.utils.INSTRUCTOR_user_only`` and ``cis.models.teacher.Teacher``
+to be importable in the tenant project (standard MyCE shape).
