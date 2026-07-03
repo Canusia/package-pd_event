@@ -146,3 +146,42 @@ class InstructorEventListTests(TestCase):
             'login' in location or 'next=' in location,
             f"Expected a login redirect, got: {resp['Location']}",
         )
+
+
+class FacultyEventIndexAccessTests(TestCase):
+    """
+    Regression tests for pd_event.views.event.index (the /faculty/events/ and
+    /ce/events/ list page).
+
+    index() branches on user_has_cis_role / user_has_faculty_role but had no
+    else branch, so an authenticated user with neither role fell through with
+    `urls` and `menu` unassigned and raised
+    ``UnboundLocalError: cannot access local variable 'urls'`` -> HTTP 500.
+    Such users should be denied (403), not crash.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from django.contrib.auth.signals import user_logged_in
+        from django_login_history.models import post_login
+        cls._post_login = post_login
+        user_logged_in.disconnect(cls._post_login)
+
+    @classmethod
+    def tearDownClass(cls):
+        from django.contrib.auth.signals import user_logged_in
+        user_logged_in.connect(cls._post_login)
+        super().tearDownClass()
+
+    def test_index_denies_user_without_cis_or_faculty_role(self):
+        Group.objects.get_or_create(name='instructor')
+        user = CustomUser.objects.create_user(
+            username='norole@example.com', email='norole@example.com',
+            password='x', first_name='N', last_name='R',
+        )
+        user.groups.add(Group.objects.get(name='instructor'))
+        self.client.force_login(user)
+
+        resp = self.client.get(reverse('pd_event_faculty:events'))
+        self.assertEqual(resp.status_code, 403)

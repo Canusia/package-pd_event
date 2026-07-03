@@ -2,6 +2,7 @@ import datetime, os, logging, csv
 
 from django.conf import settings
 from django.contrib import messages
+from django.core.exceptions import PermissionDenied
 from django.db.models import Q
 from django.shortcuts import get_object_or_404, redirect, render
 from django.http import JsonResponse, HttpResponse
@@ -706,7 +707,9 @@ def detail(request, record_id):
             'all_items': 'pd_event_faculty:events'
         }
         # read_only = True
-    
+    else:
+        raise PermissionDenied
+
     return render(
         request,
         template, {
@@ -749,7 +752,9 @@ def add_new(request):
             'all_items': 'pd_event_faculty:events',
             'details_prefix': '/faculty/events/event/'
         }
-        
+    else:
+        raise PermissionDenied
+
     if request.method == 'POST':
         form = EventForm(request, request.POST)
         ajax = request.POST.get('ajax', None)
@@ -844,7 +849,9 @@ def index(request):
             'all_items': 'pd_event_faculty:events',
             'details_prefix': '/faculty/events/event/'
         }
-    
+    else:
+        raise PermissionDenied
+
     template = 'pd_event/event-list.html'
     return render(
         request,
