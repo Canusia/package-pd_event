@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "myce_pd_event"
-version = "0.0.1"
+version = "2026.1.6"
 authors = [
   { name="Avinash Kadaji", email="avi@canusia.com" },
 ]
