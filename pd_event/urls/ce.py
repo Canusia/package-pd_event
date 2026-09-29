@@ -75,3 +75,8 @@ urlpatterns = [
     path('event/<uuid:record_id>/mark_attendance/', mark_attendance, name='mark_attendance'),
     path('event/<uuid:record_id>/update_count/', update_count, name='update_count'),
 ]
+
+# Every page is staff-only; pd_letter is emailed to attendees and the UUID in
+# its link is the credential.
+from ..access import gate_urlpatterns, ce_only
+gate_urlpatterns(urlpatterns, ce_only, public=('pd_letter',))

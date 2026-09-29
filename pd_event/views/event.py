@@ -178,7 +178,6 @@ def event_signin_sheet(request, record_id):
     response['Content-Disposition'] = 'attachment; filename="event_signin_sheet.pdf"'
 
     return response
-event_signin_sheet.login_required = False
 
 def pd_letter(request, attendance_id):
     import pdfkit

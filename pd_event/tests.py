@@ -249,3 +249,84 @@ class InstallIsSeedOnlyTests(TestCase):
                 self.assertEqual(value[dropped], defaults[dropped])
                 for key, expected in custom.items():
                     self.assertEqual(value[key], expected, msg=key)
+
+
+class RouteRoleGateTests(TestCase):
+    """Every /ce/events/ route is CE-only and every /faculty/events/ route is
+    CE or faculty. Before v2026.1.7 the page views had no role check: a
+    student could delete an event, and anyone -- logged in or not -- could
+    download an event's sign-in sheet with its guest list. pd_letter stays
+    public: it is emailed to attendees and the UUID is the credential."""
+
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        from django.contrib.auth.signals import user_logged_in
+        from django_login_history.models import post_login
+        cls._post_login = post_login
+        user_logged_in.disconnect(cls._post_login)
+
+    @classmethod
+    def tearDownClass(cls):
+        from django.contrib.auth.signals import user_logged_in
+        user_logged_in.connect(cls._post_login)
+        super().tearDownClass()
+
+    @classmethod
+    def setUpTestData(cls):
+        def user(slug, group):
+            Group.objects.get_or_create(name=group)
+            u = CustomUser.objects.create_user(
+                username=f'{slug}@example.com', email=f'{slug}@example.com',
+                password='x', first_name=slug, last_name='Gate')
+            u.groups.add(Group.objects.get(name=group))
+            return u
+
+        cls.ce = user('ce', 'ce')
+        cls.faculty = user('fac', 'faculty')
+        cls.student = user('stud', 'student')
+        year = AcademicYear.objects.create(name='2027-2028')
+        term = Term.objects.create(academic_year=year, code='G27', label='Gate 27')
+        now = timezone.now()
+        cls.event = Event.objects.create(
+            event_type=EventType.objects.create(name='Gate'), term=term,
+            name='Gated', start_time=now, end_time=now + timedelta(hours=1),
+            created_by=cls.ce)
+
+    def test_student_cannot_delete_an_event(self):
+        self.client.force_login(self.student)
+        resp = self.client.get(reverse('pd_event:delete_event', args=[self.event.id]))
+        self.assertEqual(resp.status_code, 403)
+        self.assertTrue(Event.objects.filter(pk=self.event.pk).exists())
+
+    def test_student_denied_on_every_ce_and_faculty_page(self):
+        self.client.force_login(self.student)
+        for name, args in [
+            ('pd_event:event_types', []),
+            ('pd_event:attendees', [self.event.id]),
+            ('pd_event:export_signin_sheet', [self.event.id]),
+            ('pd_event_faculty:events', []),
+            ('pd_event_faculty:attendees', [self.event.id]),
+        ]:
+            with self.subTest(name=name):
+                self.assertEqual(self.client.get(reverse(name, args=args)).status_code, 403)
+
+    def test_faculty_denied_on_ce_routes(self):
+        self.client.force_login(self.faculty)
+        resp = self.client.get(reverse('pd_event:event_types'))
+        self.assertEqual(resp.status_code, 403)
+
+    def test_signin_sheet_requires_login(self):
+        resp = self.client.get(
+            reverse('pd_event:export_signin_sheet', args=[self.event.id]))
+        self.assertEqual(resp.status_code, 302)
+
+    def test_ce_reaches_ce_pages(self):
+        self.client.force_login(self.ce)
+        self.assertEqual(self.client.get(reverse('pd_event:event_types')).status_code, 200)
+
+    def test_pd_letter_route_stays_public(self):
+        from django.urls import resolve
+        view = resolve(reverse('pd_event:pd_letter', args=[self.event.id])).func
+        self.assertFalse(getattr(view, 'login_required', True))
+        self.assertFalse(hasattr(view, '__wrapped__'))
