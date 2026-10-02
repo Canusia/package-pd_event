@@ -4,13 +4,17 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "myce_pd_event"
-version = "2026.1.6"
+version = "2026.1.7"
 authors = [
   { name="Avinash Kadaji", email="avi@canusia.com" },
 ]
 description = "MYCE - PD Event"
 readme = "README.md"
 requires-python = ">=3.8"
+dependencies = [
+    "Django>=3.2",
+    "myce_cis>=0.1.7a",
+]
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
