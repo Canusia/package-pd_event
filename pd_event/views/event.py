@@ -18,6 +18,7 @@ from rest_framework.response import Response
 
 from cis.models.faculty import FacultyCoordinator, FacultyCourseCoordinator
 from cis.models.highschool import HighSchool
+from cis.highschool_scope import picker_queryset
 from cis.models.term import Term
 from cis.models.course import Cohort, CohortParticipant, CohortAffiliation, Course, CourseAdministrator
 from cis.models.note import EventNote
@@ -596,9 +597,8 @@ def search_guest_list(request):
             })
     
     elif attendee_type == 'highschool':
-        records = HighSchool.objects.filter(
-            status__iexact='active'
-        ).order_by('name')
+        # Schools with an Active link to the current campus (per request).
+        records = picker_queryset()
 
         for record in records:
             result['data'].append({
