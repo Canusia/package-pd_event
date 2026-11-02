@@ -4,6 +4,9 @@ from django.apps import AppConfig
 class PdEventConfig(AppConfig):
     name = 'pd_event'
 
+    def ready(self):
+        from . import menu  # noqa: F401  sidebar items (cis.menu_registry)
+
     CONFIGURATORS = [
         {
             'app': 'pd_event',
@@ -45,6 +48,9 @@ class PdEventConfig(AppConfig):
 
 class DevPdEventConfig(AppConfig):
     name = 'pd_event.pd_event'
+
+    def ready(self):
+        from . import menu  # noqa: F401  sidebar items (cis.menu_registry)
 
     CONFIGURATORS = PdEventConfig.CONFIGURATORS
     REPORTS = PdEventConfig.REPORTS
