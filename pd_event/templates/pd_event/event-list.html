@@ -207,7 +207,7 @@
                     function pd_vs(value, type, row, key, unit) {
                         let shown = value === null || value === undefined ? '–' : value + (unit || '');
                         if (type !== 'display' || !pd_compare) return type === 'display' ? shown : value;
-                        if (!row.prior) return shown + '<div class="small text-muted">no events a year earlier</div>';
+                        if (!row.prior) return shown;  // said once, under the term
                         let before = row.prior[key];
                         if (before === null || before === undefined || value === null || value === undefined)
                             return shown + '<div class="small text-muted">vs –</div>';
@@ -241,7 +241,11 @@
                                         data: null, orderable: false, searchable: false, className: 'pd-term-toggle',
                                         render: function () { return '<a href="#" title="Show breakdown"><i class="fa fa-plus-circle"></i></a>'; }
                                     },
-                                    {data: 'term', render: function (d) { return pd_esc(d); }},
+                                    {data: 'term', render: function (d, type, row) {
+                                        if (type !== 'display' || !pd_compare) return type === 'display' ? pd_esc(d) : d;
+                                        return pd_esc(d) + '<div class="small text-muted">' +
+                                            (row.prior ? 'vs ' + pd_esc(row.prior.term) : 'no events a year earlier') + '</div>';
+                                    }},
                                     {data: 'events', className: 'text-right', render: function (d, type, row) { return pd_vs(d, type, row, 'events'); }},
                                     {data: 'invited', className: 'text-right', render: function (d, type, row) { return pd_vs(d, type, row, 'invited'); }},
                                     {data: 'attended', className: 'text-right', render: function (d, type, row) { return pd_vs(d, type, row, 'attended'); }},
