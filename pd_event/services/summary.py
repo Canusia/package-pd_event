@@ -421,3 +421,67 @@ def required_missed(term):
     """Attendee rows marked Not Attended on a required event in the term."""
     return [a for a in term_attendees([term.id]).order_by('event__start_time')
             if is_required_missed(a)]
+
+
+def _history_row(a):
+    event = a.event
+    key = status_key(a)
+    return {
+        'id': str(a.id),
+        'event': event.name or str(event.event_type),
+        'event_type': event.event_type.name,
+        'event_url': str(event.ce_url),
+        'term': event.term.label,
+        'term_id': str(event.term_id),
+        'start': event.start_time_local if event.start_time else None,
+        'courses': courses_of(a),
+        'school': school_and_course(a)[0],
+        'person': person(a),
+        'status_key': key,
+        'status': STATUS_LABELS[key],
+        'attendance_type': attendance_type_key(a) or '',
+        'required_missed': is_required_missed(a),
+        'pd_hours': _round_hours(pd_hours(a)),
+        'letter_sent_on': letter_sent_on(a),
+        'pd_letter_url': str(a.pd_url) if gets_letter(a) else '',
+    }
+
+
+def history(rows):
+    """Guest rows -> {'rows': [...newest first], 'terms': [per-term totals]}."""
+    import datetime
+    oldest = datetime.datetime.min.replace(tzinfo=datetime.timezone.utc)
+    rows = sorted(rows, key=lambda a: a.event.start_time or oldest, reverse=True)
+    out = [_history_row(a) for a in rows]
+    terms = OrderedDict()
+    for row in out:
+        t = terms.setdefault(row['term_id'], {
+            'term': row['term'], 'events': 0, 'attended': 0, 'required_missed': 0,
+            'pd_hours': 0})
+        t['events'] += 1
+        t['attended'] += row['status_key'] == KEY_ATTENDED
+        t['required_missed'] += row['required_missed']
+        t['pd_hours'] = _round_hours(t['pd_hours'] + row['pd_hours'])
+    return {'rows': out, 'terms': list(terms.values())}
+
+
+HISTORY_RELATED = ('event__term', 'event__event_type') + ATTENDEE_RELATED
+
+
+def teacher_history(teacher):
+    """An instructor's PD events, every course certificate (#15)."""
+    from ..models import EventAttendee
+    return history(EventAttendee.objects.filter(
+        course_certificate__teacher_highschool__teacher=teacher
+    ).select_related(*HISTORY_RELATED))
+
+
+def school_history(highschool_ids, term_id=None):
+    """PD events of the instructors at these high schools (#15)."""
+    from ..models import EventAttendee
+    rows = EventAttendee.objects.filter(
+        course_certificate__teacher_highschool__highschool_id__in=list(highschool_ids)
+    ).select_related(*HISTORY_RELATED)
+    if term_id:
+        rows = rows.filter(event__term_id=term_id)
+    return history(rows)

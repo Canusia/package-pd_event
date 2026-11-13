@@ -873,3 +873,71 @@ class FollowupCommandTests(FollowupTests):
         send.assert_not_called()
         self.assertIn('Would send: 1 event(s)', out.getvalue())
         self.assertIn('missed required: Bob Teacher', out.getvalue())
+
+
+class PdOnOtherPagesTests(_Fixture):
+    """#15: instructor PD history, HS admin attendance, dashboards."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from cis.models.highschool_administrator import (
+            HSAdministrator, HSAdministratorPosition, HSPosition)
+        Group.objects.get_or_create(name='highschool_admin')
+        cls.hs_user = CustomUser.objects.create_user(
+            username=_u('hsa'), email=f'{_u("hsa")}@x.com', password='x')
+        cls.hs_user.groups.add(Group.objects.get(name='highschool_admin'))
+        HSAdministratorPosition.objects.create(
+            hsadmin=HSAdministrator.objects.create(user=cls.hs_user), highschool=cls.north,
+            position=HSPosition.objects.create(name=_u('Counselor')), status='Active')
+
+    def test_teacher_history(self):
+        from .services.summary import teacher_history
+        teacher = self.bob.course_certificate.teacher_highschool.teacher
+        history = teacher_history(teacher)
+        self.assertEqual([r['event'] for r in history['rows']], ['Fall Workshop'])
+        self.assertTrue(history['rows'][0]['required_missed'])
+        term = history['terms'][0]
+        self.assertEqual((term['term'], term['events'], term['attended'], term['required_missed'],
+                          term['pd_hours']), ('Fall 2026', 1, 0, 1, 0))
+
+    def test_teacher_tab_is_registered(self):
+        from myce.component_registry.teacher import teacher_tabs
+        from . import tabs  # noqa: F401
+        self.assertIn('pd_events', teacher_tabs._tabs)
+
+    def test_teacher_tab_renders(self):
+        from django.template.loader import render_to_string
+        from .tabs import teacher_pd_tab
+        teacher = self.ann.course_certificate.teacher_highschool.teacher
+        context = teacher_pd_tab(RequestFactory().get('/x'), teacher)
+        html = render_to_string('pd_event/tabs/_teacher_pd.html', context)
+        self.assertIn('Fall Workshop', html)
+        self.assertIn('Attended', html)
+
+    def test_hs_admin_page_shows_only_own_schools(self):
+        from .views.highschool_admin import events
+        html = self._get(events, user=self.hs_user).content.decode()
+        for first in ('Ann', 'Bob', 'Fay'):
+            self.assertIn(f'Teacher, {first}', html)
+        for first in ('Cat', 'Dan', 'Eve'):
+            self.assertNotIn(f'Teacher, {first}', html)
+
+    def test_hs_admin_page_refuses_others(self):
+        from django.core.exceptions import PermissionDenied
+        from .views.highschool_admin import events
+        with self.assertRaises(PermissionDenied):
+            self._get(events)  # the CE user
+
+    def test_ce_dashboard_message(self):
+        from .page_messages import ce_dashboard
+        messages = ce_dashboard(RequestFactory().get('/x'))
+        self.assertTrue(any('need attendance marked' in m.text for m in messages))
+
+    def test_hs_admin_dashboard_message(self):
+        from .page_messages import hs_admin_dashboard
+        request = RequestFactory().get('/x')
+        request.user = self.hs_user
+        messages = hs_admin_dashboard(request)
+        self.assertEqual(len(messages), 1)
+        self.assertIn('1 teacher', messages[0].text)

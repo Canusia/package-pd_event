@@ -1,0 +1,22 @@
+{% extends "cis/logged-base.html" %}
+{% block title %}{{ page_title }}{% endblock %}
+{% block body %}
+<main>
+  <h1 class="h3 mb-3 text-gray-800">{{ page_title }}</h1>
+  <p class="text-muted">Professional development events your school's instructors were invited to, and whether they attended. Rows in red are required events they missed.</p>
+  <div class="card border-top-0 mb-3">
+    <div class="card-body">
+      <div class="card mb-3"><div class="card-body bg-gray-200">
+        <form method="get" class="form-inline">
+          <label class="mr-2" for="id_term">Term</label>
+          <select name="term" id="id_term" class="form-control form-control-sm mr-2" onchange="this.form.submit()">
+            <option value="">All terms</option>
+            {% for t in terms %}<option value="{{ t.id }}" {% if t.id|stringformat:'s' == term_id %}selected{% endif %}>{{ t.label }}</option>{% endfor %}
+          </select>
+        </form>
+      </div></div>
+      {% include 'pd_event/tabs/_pd_history.html' with show_person=True %}
+    </div>
+  </div>
+</main>
+{% endblock %}

@@ -6,6 +6,7 @@ class PdEventConfig(AppConfig):
 
     def ready(self):
         from . import menu  # noqa: F401  sidebar items (cis.menu_registry)
+        from . import tabs  # noqa: F401  tabs on other apps' pages (#15)
 
     CONFIGURATORS = [
         {
@@ -51,6 +52,7 @@ class DevPdEventConfig(AppConfig):
 
     def ready(self):
         from . import menu  # noqa: F401  sidebar items (cis.menu_registry)
+        from . import tabs  # noqa: F401  tabs on other apps' pages (#15)
 
     CONFIGURATORS = PdEventConfig.CONFIGURATORS
     REPORTS = PdEventConfig.REPORTS

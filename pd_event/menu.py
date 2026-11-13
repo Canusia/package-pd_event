@@ -13,3 +13,7 @@ if menu is not None:
                   parent='events', order=10)
     menu.register('ce', 'event_types', 'Event Types', url='pd_event:event_types',
                   parent='events', order=20)
+    # HS admin portal (#15); the host mounts urls.highschool_admin.
+    menu.register('highschool_admin', 'pd_events', 'PD Events',
+                  url='pd_event_highschool_admin:events',
+                  icon='fas fa-fw fa-chalkboard-teacher', order=60)
