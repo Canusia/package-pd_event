@@ -667,3 +667,95 @@ class OtherGuestTypesTests(_Fixture):
         from datetime import datetime
         self.assertEqual(format_event_time(timezone.make_aware(datetime(2026, 11, 3, 14, 5))),
                          '11/03/2026 02:05 PM')
+
+
+class DuplicateInviteTests(_Fixture):
+    """#10: one guest row per person."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        th = cls.ann.course_certificate.teacher_highschool
+        cls.ann_mth = TeacherCourseCertificate.objects.create(teacher_highschool=th, course=cls.mth)
+        cls.new_th = TeacherHighSchool.objects.create(
+            teacher=Teacher.objects.create(user=CustomUser.objects.create_user(
+                username=_u('gus'), email=f'{_u("gus")}@x.com', password='x',
+                first_name='Gus', last_name='Teacher')),
+            highschool=cls.north)
+        cls.gus_eng = TeacherCourseCertificate.objects.create(teacher_highschool=cls.new_th, course=cls.eng)
+        cls.gus_mth = TeacherCourseCertificate.objects.create(teacher_highschool=cls.new_th, course=cls.mth)
+
+    def _add(self, *certs):
+        from .views.event import add_attendee
+        request = RequestFactory().post('/x', {
+            'attendee': [str(c.certificate_id) for c in certs],
+            'attendance_type': 'optional', 'type': 'instructor'})
+        request.user = self.ce_user
+        return json.loads(add_attendee(request, self.event.id).content)
+
+    def _rows_for(self, th):
+        return EventAttendee.objects.filter(
+            event=self.event, course_certificate__teacher_highschool__teacher=th.teacher)
+
+    def test_one_row_when_adding_two_courses_of_one_person(self):
+        resp = self._add(self.gus_eng, self.gus_mth)
+        rows = self._rows_for(self.new_th)
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(sorted(rows[0].meta['courses']), ['ENG 101', 'MTH 102'])
+        self.assertIn('1 added', resp['message'])
+
+    def test_person_already_invited_gets_the_course_not_a_row(self):
+        self._add(self.ann_mth)
+        rows = self._rows_for(self.ann.course_certificate.teacher_highschool)
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(sorted(rows[0].meta['courses']), ['ENG 101', 'MTH 102'])
+
+    def _duplicate_ann(self, status=UNMARKED, kind='optional', **meta):
+        return EventAttendee.objects.create(
+            event=self.event, course_certificate=self.ann_mth, type='instructor',
+            meta={'id': str(self.ann_mth.certificate_id), 'attendance_type': kind,
+                  'attendance_status': status, 'pd_hour': 0, **meta})
+
+    def test_summary_counts_duplicates(self):
+        from .services.summary import event_summary
+        self._duplicate_ann()
+        self.assertEqual(event_summary(self.event)['duplicates'], 1)
+
+    def test_merge_keeps_the_strongest_row(self):
+        from .views.event import merge_duplicates
+        dup = self._duplicate_ann(status=NOT_ATTENDED, kind='required', note='late')
+        self.ann.meta['attendance_type'] = 'optional'
+        self.ann.meta['note'] = 'front row'
+        self.ann.save()
+        resp = json.loads(self._post(merge_duplicates, self.event.id).content)
+        self.assertEqual(resp['status'], 'success')
+        self.assertIn('Merged 1', resp['message'])
+        rows = self._rows_for(self.ann.course_certificate.teacher_highschool)
+        self.assertEqual([r.pk for r in rows], [self.ann.pk])  # attended row kept
+        kept = rows[0]
+        self.assertEqual(kept.meta['attendance_status'], ATTENDED)
+        self.assertEqual(kept.meta['attendance_type'], 'required')  # any required
+        self.assertEqual(sorted(kept.meta['courses']), ['ENG 101', 'MTH 102'])
+        self.assertEqual(kept.meta['note'], 'front row; late')
+        self.assertEqual(kept.meta['pd_letter_sent_on'], '11/01/2026')
+        self.assertFalse(EventAttendee.objects.filter(pk=dup.pk).exists())
+
+    def test_merge_without_duplicates(self):
+        from .views.event import merge_duplicates
+        resp = json.loads(self._post(merge_duplicates, self.event.id).content)
+        self.assertIn('No duplicate', resp['message'])
+        self.assertEqual(EventAttendee.objects.filter(event=self.event).count(), 6)
+
+
+class DuplicateDisplayTests(DuplicateInviteTests):
+    """#10 on the page: the warning and per-course counts."""
+
+    def test_warning_and_course_counts(self):
+        from .views.event import event_summary_view
+        from .services.summary import event_summary
+        self._add(self.gus_eng, self.gus_mth)
+        by_course = {r['name']: r['invited'] for r in event_summary(self.event)['by_course']}
+        self.assertEqual(by_course, {'ENG 101': 4, 'MTH 102': 4})
+        self.assertNotIn('Merge duplicate invites', self._get(event_summary_view, self.event.id).content.decode())
+        self._duplicate_ann()
+        self.assertIn('Merge duplicate invites', self._get(event_summary_view, self.event.id).content.decode())

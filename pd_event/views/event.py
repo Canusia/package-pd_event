@@ -389,15 +389,38 @@ def add_attendee(request, record_id):
         })
 
     num_added = 0
-    mesg = []
+    num_combined = 0
+
+    # One row per person (#10): an instructor already on the list, or added
+    # twice in this batch, gets the extra course noted on their row.
+    from ..services.summary import courses_of, teacher_id
+    by_teacher = {}
+    if attendee_type == 'instructor':
+        for row in EventAttendee.objects.filter(event=event, type='instructor').select_related(
+                'course_certificate__course', 'course_certificate__teacher_highschool'):
+            if teacher_id(row):
+                by_teacher.setdefault(teacher_id(row), row)
+
     for r in attendees:
 
         try:
+            cert = None
             if attendee_type == 'instructor':
                 if EventAttendee.objects.filter(
                     course_certificate__certificate_id=r,
                     event=event
                 ).exists():
+                    continue
+                cert = TeacherCourseCertificate.objects.select_related(
+                    'course', 'teacher_highschool').get(certificate_id=r)
+                existing = by_teacher.get(cert.teacher_highschool.teacher_id)
+                if existing is not None:
+                    courses = courses_of(existing)
+                    if cert.course.name not in courses:
+                        courses.append(cert.course.name)
+                    existing.meta['courses'] = courses
+                    existing.save()
+                    num_combined += 1
                     continue
             elif EventAttendee.objects.filter(
                     event=event, type=attendee_type, meta__id=str(r)).exists():
@@ -410,12 +433,11 @@ def add_attendee(request, record_id):
             ea.meta = {
                 'id': str(r)
             }
-            
-            if attendee_type == 'instructor':
-                ea.course_certificate = TeacherCourseCertificate.objects.get(
-                    certificate_id=r
-                )
-                
+
+            if cert is not None:
+                ea.course_certificate = cert
+                ea.meta['courses'] = [cert.course.name]
+
             ea.meta['attendance_type'] = attendance_type
             ea.meta['attendance_status'] = 'N/A'
             if ea.type in EventAttendee.PERSON_TYPES:
@@ -424,15 +446,36 @@ def add_attendee(request, record_id):
                 ea.meta['participants'] = 0
 
             ea.save()
+            if cert is not None:
+                by_teacher[cert.teacher_highschool.teacher_id] = ea
 
             num_added += 1
         except Exception as e:
-            print(e)
-            pass
+            logging.getLogger(__name__).warning('add_attendee %s: %s', r, e)
 
+    message = f'Successfully processed your request: {num_added} added.'
+    if num_combined:
+        message += (f' {num_combined} course(s) noted on instructors already on the list'
+                    ' (one row per person).')
     return JsonResponse({
         'status': 'success',
-        'message': 'Successfully processed your request'
+        'message': message
+    })
+
+
+def merge_duplicates(request, record_id):
+    """Merge Duplicate Invites on the guest list (#10)."""
+    if not (user_has_cis_role(request.user) or user_has_faculty_role(request.user)):
+        raise PermissionDenied
+    if request.method != 'POST':
+        return JsonResponse({'status': 'error', 'message': 'POST only.'}, status=405)
+    from ..services.summary import merge_duplicates as merge
+    removed = merge(get_object_or_404(Event, pk=record_id))
+    if not removed:
+        return JsonResponse({'status': 'success', 'message': 'No duplicate invites found.'})
+    return JsonResponse({
+        'status': 'success',
+        'message': f'Merged {removed} duplicate invite(s): one row per person now.'
     })
 
 def remove_attendee(request, record_id):
@@ -531,7 +574,7 @@ def attendees(request, record_id):
             try:
                 name = f'{a.course_certificate.teacher_highschool.teacher.user.last_name}, {a.course_certificate.teacher_highschool.teacher.user.first_name}'
 
-                col_2 = f'{a.course_certificate.course.name}'
+                col_2 = ', '.join(att.courses_of(a))
                 col_3 = f'{a.course_certificate.teacher_highschool.highschool.name}'
             except Exception:
                 # Listed rather than skipped, so the table agrees with the
@@ -559,6 +602,7 @@ def attendees(request, record_id):
                 'col_3': col_3,
                 'school': school,
                 'course': course,
+                'courses': att.courses_of(a),
                 'attendance_status': att.STATUS_LABELS[key],
                 'status_key': key,
                 'attendance_type': (a.meta.get('attendance_type') or '').replace('_', ' ').title(),

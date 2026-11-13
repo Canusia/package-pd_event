@@ -110,6 +110,71 @@ def person(attendee):
     return info.get('last_name', '') or '', info.get('first_name', '') or '', info.get('email', '') or ''
 
 
+def person_key(attendee):
+    """Who a guest row is: an instructor by teacher (any of their course
+    certificates), anyone else by type and record id (#10)."""
+    tid = teacher_id(attendee)
+    if tid:
+        return ('teacher', tid)
+    return (attendee.type, str((attendee.meta or {}).get('id', attendee.pk)))
+
+
+def courses_of(attendee):
+    """The courses an instructor guest was invited for: meta['courses'] when
+    invites were combined (#10), else the certificate's course."""
+    courses = (attendee.meta or {}).get('courses')
+    if courses:
+        return list(courses)
+    _, course = school_and_course(attendee)
+    return [course] if course else []
+
+
+STATUS_RANK = {KEY_ATTENDED: 0, KEY_NOT_ATTENDED: 1, KEY_NOT_MARKED: 2}
+
+
+def merge_duplicates(event):
+    """Combine guest rows for the same person into one (#10). Keeps the
+    strongest row (attended, then not attended, then not marked; a sent
+    letter wins a tie); required if any was; courses, notes, hours and the
+    letter date are carried over. Returns the number of rows removed."""
+    groups = OrderedDict()
+    for a in event_attendees(event).order_by('id'):
+        groups.setdefault(person_key(a), []).append(a)
+
+    removed = 0
+    for rows in groups.values():
+        if len(rows) < 2:
+            continue
+        rows.sort(key=lambda a: (STATUS_RANK[status_key(a)], not letter_sent_on(a)))
+        keep, others = rows[0], rows[1:]
+        meta = dict(keep.meta or {})
+        courses, notes = [], []
+        for a in rows:
+            for course in courses_of(a):
+                if course not in courses:
+                    courses.append(course)
+            note = ((a.meta or {}).get('note') or '').strip()
+            if note and note not in notes:
+                notes.append(note)
+        if any(attendance_type_key(a) == 'required' for a in rows):
+            meta['attendance_type'] = 'required'
+        meta['courses'] = courses
+        if notes:
+            meta['note'] = '; '.join(notes)
+        if not meta.get('pd_letter_sent_on'):
+            sent = [letter_sent_on(a) for a in others if letter_sent_on(a)]
+            if sent:
+                meta['pd_letter_sent_on'] = sent[0]
+        if status_key(keep) == KEY_ATTENDED:
+            meta['pd_hour'] = max([pd_hours(a) for a in rows] + [pd_hours(keep)])
+        for a in others:
+            a.delete()
+            removed += 1
+        keep.meta = meta
+        keep.save()
+    return removed
+
+
 def teacher_id(attendee):
     cert = attendee.course_certificate if attendee.course_certificate_id else None
     try:
@@ -152,8 +217,10 @@ def summarize(attendees):
     summary = {'required': 0, 'optional': 0, 'required_missed': 0, 'pd_hours': 0.0,
                'letters_sent': 0, 'letters_owed': 0}
     teachers = set()
+    people = set()
 
     for a in attendees:
+        people.add(person_key(a))
         key = status_key(a)
         counts[key] += 1
         kind = attendance_type_key(a)
@@ -164,10 +231,10 @@ def summarize(attendees):
         summary['pd_hours'] += pd_hours(a)
         if gets_letter(a):
             summary['letters_sent' if letter_sent_on(a) else 'letters_owed'] += 1
-        school, course = school_and_course(a)
+        school, _ = school_and_course(a)
         if school:
             by_school.setdefault(school, []).append(a)
-        if course:
+        for course in courses_of(a):  # every course on a combined invite (#10)
             by_course.setdefault(course, []).append(a)
         if key == KEY_ATTENDED and teacher_id(a):
             teachers.add(teacher_id(a))
@@ -184,6 +251,8 @@ def summarize(attendees):
         'schools': len(by_school),
         'courses': len(by_course),
         'instructors': len(teachers),
+        # Extra rows for a person already on the list (#10).
+        'duplicates': invited - len(people),
         'by_school': _breakdown(by_school),
         'by_course': _breakdown(by_course),
     })

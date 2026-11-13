@@ -30,6 +30,7 @@ from ..views.event import (
     events_by_term,
     events_by_term_detail,
     required_missed_csv,
+    merge_duplicates,
     delete as delete_event
 )
 from rest_framework import routers
@@ -83,4 +84,6 @@ urlpatterns = [
     path('event/<uuid:record_id>/mark_attendance/', mark_attendance, name='mark_attendance'),
     path('event/<uuid:record_id>/update_count/', update_count, name='update_count'),
     path('event/<uuid:record_id>/summary/', event_summary_view, name='event_summary'),
+    path('event/<uuid:record_id>/attendee/merge_duplicates/', merge_duplicates,
+         name='merge_duplicates'),
 ]

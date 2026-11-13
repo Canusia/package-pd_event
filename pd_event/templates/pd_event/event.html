@@ -354,7 +354,7 @@
                                                             &nbsp;<input type="button" class="btn btn-sm btn-info"
                                                                 id="btn_toggle_selected" value="Change Attendance Type"
                                                                 name="toggle_selected">&nbsp;
-                                                                <a href="{%url 'pd_event:export_attendee_list' record.id %}" class="btn btn-sm btn-primary">Export Attendee List</a>&nbsp;<a href="{%url 'pd_event:export_signin_sheet' record.id %}" class="btn btn-sm btn-info">Export Sign-in Sheet</a>
+                                                                <a href="{%url 'pd_event:export_attendee_list' record.id %}" class="btn btn-sm btn-primary">Export Attendee List</a>&nbsp;<a href="{%url 'pd_event:export_signin_sheet' record.id %}" class="btn btn-sm btn-info">Export Sign-in Sheet</a>&nbsp;<input type="button" class="btn btn-sm btn-outline-secondary btn_merge_duplicates" value="Merge Duplicate Invites">
                                                         </td>
                                                     </tr>
                                                 </tfoot>
@@ -403,7 +403,7 @@
                                                                     $.fn.dataTable.ext.search.push(function (settings, data, index, row) {
                                                                         if (settings.nTable.id !== 'event_attendee_list') return true;
                                                                         if (pd_filter.school && row.school !== pd_filter.school) return false;
-                                                                        if (pd_filter.course && row.course !== pd_filter.course) return false;
+                                                                        if (pd_filter.course && (row.courses || []).indexOf(pd_filter.course) < 0) return false;
                                                                         switch (pd_filter.status) {
                                                                             case 'attended': case 'not_attended': case 'not_marked':
                                                                                 return row.status_key === pd_filter.status;
@@ -453,7 +453,10 @@
                                                                                         .filter(function (v, i, all) { return v && all.indexOf(v) === i; }).sort();
                                                                                 };
                                                                                 fill_select('#attendance_filter_school', unique('school'));
-                                                                                fill_select('#attendance_filter_course', unique('course'));
+                                                                                fill_select('#attendance_filter_course', rows.reduce(function (all, r) {
+                                                                                    (r.courses || []).forEach(function (c) { if (all.indexOf(c) < 0) all.push(c); });
+                                                                                    return all;
+                                                                                }, []).sort());
                                                                                 let marked = rows.filter(function (r) { return r.status_key !== 'not_marked'; }).length;
                                                                                 $('#attendance_progress').text(rows.length ? marked + ' of ' + rows.length + ' marked' : '');
                                                                             },
@@ -582,6 +585,23 @@
                                                                                 {name: 'scope', value: 'unmarked'},
                                                                                 {name: 'attendance_status', value: 'not attended'}
                                                                             ]);
+                                                                        });
+                                                                        $(document).on('click', '.btn_merge_duplicates', function (e) {
+                                                                            e.preventDefault();
+                                                                            if (!confirm('Combine guest rows for the same person into one? Attendance, notes, courses and letters are kept.')) return;
+                                                                            $.blockUI();
+                                                                            $.post({
+                                                                                url: "{% url 'pd_event:merge_duplicates' record.id %}",
+                                                                                data: $.param([{name: 'csrfmiddlewaretoken', value: $('#frm_attendance [name=csrfmiddlewaretoken]').val()}]),
+                                                                                dataType: 'json',
+                                                                                complete: function () { $.unblockUI(); },
+                                                                                success: function (response) {
+                                                                                    swal("", response.message, response.status === 'success' ? "success" : "warning");
+                                                                                    get_event_guests();
+                                                                                    get_event_attendees();
+                                                                                    refresh_summary();
+                                                                                }
+                                                                            });
                                                                         });
                                                                         $('#btn_send_pd_letters_owed').on('click', function () {
                                                                             if (!confirm('Email a PD letter to everyone who attended and has not been sent one?')) return;

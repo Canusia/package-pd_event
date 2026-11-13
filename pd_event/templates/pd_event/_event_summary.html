@@ -5,6 +5,12 @@ event page wires that up. Re-fetched from pd_event:event_summary after
 attendance changes.
 {% endcomment %}
 <div id="event_summary" class="mb-3">
+  {% if summary.duplicates %}
+  <div class="alert alert-warning py-2 small mb-2">
+    {{ summary.duplicates }} guest row{{ summary.duplicates|pluralize }} {{ summary.duplicates|pluralize:"is a duplicate,are duplicates" }} of someone already on the list, so the counts below include them.
+    <a href="#" class="alert-link btn_merge_duplicates">Merge duplicate invites</a>
+  </div>
+  {% endif %}
   <div class="row pd-summary">
     <div class="col-6 col-md-4 col-xl-2 mb-2">
       <a href="#manage_attendance" class="card h-100 border-left-primary text-decoration-none pd-summary-card" data-filter="all">
