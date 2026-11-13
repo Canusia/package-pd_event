@@ -286,7 +286,8 @@ class Event(models.Model):
                 start_date_time=format_event_time(self.start_time),
                 end_date_time=format_event_time(self.end_time),
                 event_type=self.event_type,
-                description=self.description
+                description=self.description,
+                rsvp_url=attendee.rsvp_url,
             )
 
             if getattr(settings, 'DEBUG') == True:
@@ -438,6 +439,39 @@ class EventAttendee(models.Model):
             to
         )
         return True
+
+    RSVP_CHOICES = ('confirmed', 'declined')
+
+    def rsvp_token(self):
+        """Signed id for the guest's RSVP link (#14)."""
+        from django.core.signing import Signer
+        return Signer(salt='pd_event.rsvp').sign(str(self.id))
+
+    @classmethod
+    def from_rsvp_token(cls, token):
+        """The guest row for a token, or None when it is bad or gone."""
+        from django.core.signing import BadSignature, Signer
+        try:
+            pk = Signer(salt='pd_event.rsvp').unsign(token)
+        except BadSignature:
+            return None
+        return cls.objects.select_related('event__event_type', 'event__term').filter(pk=pk).first()
+
+    @property
+    def rsvp_url(self):
+        return getDomain() + str(reverse_lazy('pd_event:rsvp', kwargs={'token': self.rsvp_token()}))
+
+    def set_rsvp(self, answer, by):
+        """'confirmed' / 'declined', or '' to clear. `by`: 'guest' or 'ce'."""
+        meta = dict(self.meta or {})
+        if answer in self.RSVP_CHOICES:
+            meta.update({'rsvp': answer, 'rsvp_by': by,
+                         'rsvp_on': timezone.localdate().strftime('%m/%d/%Y')})
+        else:
+            for key in ('rsvp', 'rsvp_by', 'rsvp_on'):
+                meta.pop(key, None)
+        self.meta = meta
+        self.save()
 
     @property
     def pd_url(self):

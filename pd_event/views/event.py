@@ -463,6 +463,45 @@ def add_attendee(request, record_id):
     })
 
 
+def set_rsvp(request, record_id):
+    """CE records an RSVP for the selected guests (#14); '' clears it."""
+    if not (user_has_cis_role(request.user) or user_has_faculty_role(request.user)):
+        raise PermissionDenied
+    event = get_object_or_404(Event, pk=record_id)
+    answer = request.POST.get('rsvp', '')
+    ids = request.POST.getlist('attendee')
+    if not ids:
+        return JsonResponse({'status': 'error', 'message': 'Please select a record and try again'})
+    rows = EventAttendee.objects.filter(event=event, id__in=ids)
+    for row in rows:
+        row.set_rsvp(answer, 'ce')
+    label = {'confirmed': 'confirmed', 'declined': 'declined'}.get(answer, 'cleared')
+    return JsonResponse({'status': 'success', 'message': f'RSVP {label} for {len(rows)} guest(s).'})
+
+
+def rsvp(request, token):
+    """The guest's RSVP page from the emailed link (#14). No login: the link
+    is signed. Answers are taken until the event starts."""
+    from django.http import Http404
+    attendee = EventAttendee.from_rsvp_token(token)
+    if attendee is None:
+        return render(request, 'pd_event/rsvp.html', {'not_found': True}, status=404)
+    event = attendee.event
+    started = bool(event.start_time and event.start_time <= timezone.now())
+    saved = False
+    if request.method == 'POST' and not started:
+        answer = request.POST.get('answer')
+        if answer in EventAttendee.RSVP_CHOICES:
+            attendee.set_rsvp(answer, 'guest')
+            saved = True
+    person = attendee.recipient() or {}
+    return render(request, 'pd_event/rsvp.html', {
+        'attendee': attendee, 'event': event, 'person': person,
+        'answer': (attendee.meta or {}).get('rsvp', ''), 'started': started, 'saved': saved,
+    })
+rsvp.login_required = False
+
+
 def merge_duplicates(request, record_id):
     """Merge Duplicate Invites on the guest list (#10)."""
     if not (user_has_cis_role(request.user) or user_has_faculty_role(request.user)):
@@ -608,6 +647,7 @@ def attendees(request, record_id):
                 'attendance_type': (a.meta.get('attendance_type') or '').replace('_', ' ').title(),
                 'attendance_type_key': att.attendance_type_key(a),
                 'required_missed': att.is_required_missed(a),
+                'rsvp': att.rsvp_key(a),
                 'pd_hour': a.meta.get('pd_hour'),
                 'pd_letter_sent_on': att.letter_sent_on(a),
                 'gets_letter': att.gets_letter(a),

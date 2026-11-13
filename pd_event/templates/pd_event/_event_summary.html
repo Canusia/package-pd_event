@@ -69,6 +69,14 @@ attendance changes.
       </a>
     </div>
   </div>
+  {% if summary.confirmed or summary.declined %}
+  <div class="small mb-1">
+    RSVPs: <a href="#manage_attendance" class="pd-summary-rsvp text-success" data-rsvp="confirmed">{{ summary.confirmed }} confirmed</a>
+    · <a href="#manage_attendance" class="pd-summary-rsvp text-secondary" data-rsvp="declined">{{ summary.declined }} declined</a>
+    · <a href="#manage_attendance" class="pd-summary-rsvp text-muted" data-rsvp="none">{{ summary.no_reply }} no reply</a>
+    {% if summary.no_shows %}· <a href="#manage_attendance" class="pd-summary-rsvp text-danger font-weight-bold" data-rsvp="no_show">{{ summary.no_shows }} no-show{{ summary.no_shows|pluralize }}</a> (confirmed, then not attended){% endif %}
+  </div>
+  {% endif %}
   <div class="small text-muted">
     Reach: {{ summary.schools }} school{{ summary.schools|pluralize }} · {{ summary.courses }} course{{ summary.courses|pluralize }}
     {% if summary.total_cost is not None %}· Cost: ${{ summary.total_cost|floatformat:2 }} ({{ summary.attended }} attended × ${{ record.cost_per_attendee|floatformat:2 }}){% endif %}

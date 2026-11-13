@@ -42,13 +42,15 @@ class EventEmailForm(forms.Form):
             ('to_all', 'All Guests'),
             ('to_attendees', 'All Marked as Attended'),
             ('to_not_attendees', 'All Marked as Not Attended'),
+            ('to_no_reply', 'Guests Who Have Not Replied (RSVP)'),
+            ('to_confirmed', 'Guests Who Confirmed (RSVP)'),
         ]
     )
 
     short_codes = FFields.ReadOnlyField(
         required=False,
         label=mark_safe(
-            '<p class="alert">Use the form to email event guests.<br><br>Customize the subject and message with the following short codes. {{event_description}}, {{event_start_date_time}}, {{event_end_date_time}}, {{event_term}}, {{attendee_first_name}}, {{attendee_last_name}}, {{courses_name}}</p>'
+            '<p class="alert">Use the form to email event guests.<br><br>Customize the subject and message with the following short codes. {{event_description}}, {{event_start_date_time}}, {{event_end_date_time}}, {{event_term}}, {{attendee_first_name}}, {{attendee_last_name}}, {{courses_name}}, {{rsvp_url}} (a link for the guest to confirm or decline), {{pd_letter_url}}</p>'
         ),
         widget=FFields.LongLabelWidget(
             attrs={
@@ -100,10 +102,15 @@ class EventEmailForm(forms.Form):
 
         from .models import EventAttendee
 
+        from .services.summary import rsvp_key
         if data.get('email_to') == 'to_attendees':
             attendees = event.marked_as_attended
         elif data.get('email_to') == 'to_not_attendees':
             attendees = event.marked_as_not_attended
+        elif data.get('email_to') == 'to_no_reply':
+            attendees = [a for a in event.event_guests if not rsvp_key(a)]
+        elif data.get('email_to') == 'to_confirmed':
+            attendees = [a for a in event.event_guests if rsvp_key(a) == 'confirmed']
         else:
             attendees = event.event_guests
 
@@ -125,7 +132,9 @@ class EventEmailForm(forms.Form):
                 'event_start_date_time' : format_event_time(event.start_time),
                 'event_end_date_time' : format_event_time(event.end_time),
                 'description' : event.description,
+                'event_description' : event.description,
                 'pd_letter_url' : attendee.pd_url,
+                'rsvp_url' : attendee.rsvp_url,
                 'pd_note' : attendee.meta.get('note'),
             })
 

@@ -264,6 +264,13 @@
                                 <select id="attendance_filter_course" class="form-control form-control-sm w-auto mr-2 mb-1" aria-label="Filter by course">
                                     <option value="">All courses</option>
                                 </select>
+                                <select id="attendance_filter_rsvp" class="form-control form-control-sm w-auto mr-2 mb-1" aria-label="Filter by RSVP">
+                                    <option value="">Any RSVP</option>
+                                    <option value="confirmed">Confirmed</option>
+                                    <option value="declined">Declined</option>
+                                    <option value="none">No reply</option>
+                                    <option value="no_show">No-show</option>
+                                </select>
                                 <span class="small text-muted ml-auto mb-1" id="attendance_progress"></span>
                             </div>
 
@@ -354,7 +361,7 @@
                                                             &nbsp;<input type="button" class="btn btn-sm btn-info"
                                                                 id="btn_toggle_selected" value="Change Attendance Type"
                                                                 name="toggle_selected">&nbsp;
-                                                                <a href="{%url 'pd_event:export_attendee_list' record.id %}" class="btn btn-sm btn-primary">Export Attendee List</a>&nbsp;<a href="{%url 'pd_event:export_signin_sheet' record.id %}" class="btn btn-sm btn-info">Export Sign-in Sheet</a>&nbsp;<input type="button" class="btn btn-sm btn-outline-secondary btn_merge_duplicates" value="Merge Duplicate Invites">
+                                                                <a href="{%url 'pd_event:export_attendee_list' record.id %}" class="btn btn-sm btn-primary">Export Attendee List</a>&nbsp;<a href="{%url 'pd_event:export_signin_sheet' record.id %}" class="btn btn-sm btn-info">Export Sign-in Sheet</a>&nbsp;<input type="button" class="btn btn-sm btn-outline-secondary btn_merge_duplicates" value="Merge Duplicate Invites">&nbsp;<input type="button" class="btn btn-sm btn-outline-success btn_set_rsvp" data-rsvp="confirmed" value="Mark RSVP Confirmed">&nbsp;<input type="button" class="btn btn-sm btn-outline-secondary btn_set_rsvp" data-rsvp="declined" value="Mark RSVP Declined">
                                                         </td>
                                                     </tr>
                                                 </tfoot>
@@ -397,13 +404,16 @@
                                                                             .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
                                                                     }
 
-                                                                    var pd_filter = {status: 'all', school: '', course: ''};
+                                                                    var pd_filter = {status: 'all', school: '', course: '', rsvp: ''};
                                                                     var PD_STATUS_BADGE = {attended: 'badge-success', not_attended: 'badge-danger', not_marked: 'badge-secondary'};
 
                                                                     $.fn.dataTable.ext.search.push(function (settings, data, index, row) {
                                                                         if (settings.nTable.id !== 'event_attendee_list') return true;
                                                                         if (pd_filter.school && row.school !== pd_filter.school) return false;
                                                                         if (pd_filter.course && (row.courses || []).indexOf(pd_filter.course) < 0) return false;
+                                                                        if (pd_filter.rsvp === 'none' && row.rsvp) return false;
+                                                                        if (pd_filter.rsvp === 'no_show' && !(row.rsvp === 'confirmed' && row.status_key === 'not_attended')) return false;
+                                                                        if (['confirmed', 'declined'].indexOf(pd_filter.rsvp) >= 0 && row.rsvp !== pd_filter.rsvp) return false;
                                                                         switch (pd_filter.status) {
                                                                             case 'attended': case 'not_attended': case 'not_marked':
                                                                                 return row.status_key === pd_filter.status;
@@ -500,6 +510,8 @@
                                                                                         if (type !== 'display') return row.attendance_status;
                                                                                         let html = '<span class="badge ' + (PD_STATUS_BADGE[row.status_key] || 'badge-secondary') + '">' + pd_esc(row.attendance_status) + '</span>';
                                                                                         if (row.required_missed) html += ' <span class="badge badge-danger">Required missed</span>';
+                                                                                        if (row.rsvp === 'confirmed') html += ' <span class="badge badge-light border text-success" title="RSVP">RSVP: yes</span>';
+                                                                                        if (row.rsvp === 'declined') html += ' <span class="badge badge-light border text-secondary" title="RSVP">RSVP: no</span>';
                                                                                         html += '<div class="btn-group btn-group-sm mt-1 d-block" role="group">';
                                                                                         if (row.status_key !== 'attended')
                                                                                             html += '<button type="button" class="btn btn-outline-success btn-sm btn_row_mark" title="Mark as attended" data-id="' + pd_esc(row.id) + '" data-attendance="attended"><i class="fa fa-check"></i></button>';
@@ -550,6 +562,7 @@
                                                                                 if (response.status !== 'success')
                                                                                     swal("", response.message, "warning");
                                                                                 get_event_attendees();
+                                                                                get_event_guests();
                                                                                 refresh_summary();
                                                                             },
                                                                             error: function (xhr) {
@@ -562,10 +575,18 @@
                                                                         $('#attendance_filters').on('click', '[data-filter]', function () {
                                                                             set_attendance_filter($(this).attr('data-filter'));
                                                                         });
-                                                                        $('#attendance_filter_school, #attendance_filter_course').on('change', function () {
+                                                                        $('#attendance_filter_school, #attendance_filter_course, #attendance_filter_rsvp').on('change', function () {
                                                                             pd_filter.school = $('#attendance_filter_school').val();
                                                                             pd_filter.course = $('#attendance_filter_course').val();
+                                                                            pd_filter.rsvp = $('#attendance_filter_rsvp').val();
                                                                             attendees.draw();
+                                                                        });
+                                                                        // An RSVP count under the summary opens Manage Attendance filtered to it (#14).
+                                                                        $(document).on('click', '.pd-summary-rsvp', function (e) {
+                                                                            e.preventDefault();
+                                                                            $('a.nav-link[href="#manage_attendance"]').tab('show');
+                                                                            set_attendance_filter('all');
+                                                                            $('#attendance_filter_rsvp').val($(this).attr('data-rsvp')).trigger('change');
                                                                         });
                                                                         // A summary card opens Manage Attendance filtered to its rows.
                                                                         $(document).on('click', '.pd-summary-card', function (e) {
@@ -602,6 +623,12 @@
                                                                                     refresh_summary();
                                                                                 }
                                                                             });
+                                                                        });
+                                                                        $(document).on('click', '.btn_set_rsvp', function () {
+                                                                            let form = $(this).closest('form');
+                                                                            let data = $(form).serializeArray().filter(function (f) { return f.name === 'attendee'; });
+                                                                            data.push({name: 'rsvp', value: $(this).attr('data-rsvp')});
+                                                                            post_attendance("{% url 'pd_event:set_rsvp' record.id %}", data);
                                                                         });
                                                                         $('#btn_send_pd_letters_owed').on('click', function () {
                                                                             if (!confirm('Email a PD letter to everyone who attended and has not been sent one?')) return;
@@ -664,7 +691,9 @@
                                                                             },
                                                                             {
                                                                                 'render': function (data, type, row, meta) {
-                                                                                    return row.attendance_type
+                                                                                    let rsvp = {confirmed: ' <span class="badge badge-light border text-success">RSVP: yes</span>',
+                                                                                                declined: ' <span class="badge badge-light border text-secondary">RSVP: no</span>'}[row.rsvp] || '';
+                                                                                    return pd_esc(row.attendance_type) + (type === 'display' ? rsvp : '');
                                                                                 }
                                                                             }
                                                                         ]

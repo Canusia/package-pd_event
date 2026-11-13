@@ -113,10 +113,25 @@ class InstructorEventAttendeeSerializer(serializers.ModelSerializer):
     course = serializers.SerializerMethodField()
     attendance_status = serializers.SerializerMethodField()
     pd_letter_url = serializers.SerializerMethodField()
+    rsvp = serializers.SerializerMethodField()
+    rsvp_url = serializers.SerializerMethodField()
 
     class Meta:
         model = EventAttendee
-        fields = ('id', 'event', 'course', 'attendance_status', 'pd_letter_url')
+        fields = ('id', 'event', 'course', 'attendance_status', 'pd_letter_url',
+                  'rsvp', 'rsvp_url')
+        # The RSVP column renders from rsvp_url and reads rsvp too.
+        datatables_always_serialize = ('id', 'rsvp')
+
+    def get_rsvp(self, obj):
+        return (obj.meta or {}).get('rsvp') or ''
+
+    def get_rsvp_url(self, obj):
+        """The RSVP page while the event has not started (#14)."""
+        from django.utils import timezone
+        if obj.event.start_time and obj.event.start_time > timezone.now():
+            return reverse('pd_event:rsvp', kwargs={'token': obj.rsvp_token()})
+        return None
 
     def get_event(self, obj):
         return {

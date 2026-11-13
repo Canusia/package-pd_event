@@ -31,6 +31,8 @@ from ..views.event import (
     events_by_term_detail,
     required_missed_csv,
     merge_duplicates,
+    set_rsvp,
+    rsvp,
     delete as delete_event
 )
 from rest_framework import routers
@@ -86,4 +88,7 @@ urlpatterns = [
     path('event/<uuid:record_id>/summary/', event_summary_view, name='event_summary'),
     path('event/<uuid:record_id>/attendee/merge_duplicates/', merge_duplicates,
          name='merge_duplicates'),
+    path('event/<uuid:record_id>/attendee/rsvp/', set_rsvp, name='set_rsvp'),
+    # The guest's emailed RSVP link: signed, no login (#14).
+    path('rsvp/<str:token>/', rsvp, name='rsvp'),
 ]

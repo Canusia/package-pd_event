@@ -1,0 +1,42 @@
+{% extends "cis/base.html" %}
+{% block title %}RSVP{% endblock %}
+{% block body %}
+<main class="container py-5" style="max-width: 640px;">
+  <div class="card shadow-sm">
+    <div class="card-body">
+      {% if not_found %}
+        <h1 class="h4">This link isn't valid</h1>
+        <p class="mb-0">It may have been copied incompletely, or the invitation was removed. Please contact the event organizer.</p>
+      {% else %}
+        <h1 class="h4 mb-1">{{ event.name|default:event.event_type }}</h1>
+        <p class="text-muted mb-3">{{ event.event_type }} · {{ event.term.label }}</p>
+        <dl class="row small mb-3">
+          <dt class="col-sm-3">Starts</dt><dd class="col-sm-9">{% if event.start_time %}{{ event.start_time_local|date:'l, m/d/Y g:i A' }}{% else %}–{% endif %}</dd>
+          <dt class="col-sm-3">Ends</dt><dd class="col-sm-9">{% if event.end_time %}{{ event.end_time_local|date:'m/d/Y g:i A' }}{% else %}–{% endif %}</dd>
+          <dt class="col-sm-3">Delivery</dt><dd class="col-sm-9">{{ event.delivery_mode|default:'–' }}</dd>
+          {% if event.description %}<dt class="col-sm-3">Details</dt><dd class="col-sm-9">{{ event.description|linebreaksbr }}</dd>{% endif %}
+        </dl>
+        {% if person.first_name %}<p>Hi {{ person.first_name }},</p>{% endif %}
+        {% if saved %}
+          <div class="alert alert-success">Thank you, your response is saved.</div>
+        {% endif %}
+        {% if answer == 'confirmed' %}
+          <p>You told us you <strong>will attend</strong>.</p>
+        {% elif answer == 'declined' %}
+          <p>You told us you <strong>can't attend</strong>.</p>
+        {% endif %}
+        {% if started %}
+          <p class="text-muted mb-0">This event has already started, so responses are closed.</p>
+        {% else %}
+          <form method="post" class="d-flex flex-wrap">
+            {% csrf_token %}
+            <button type="submit" name="answer" value="confirmed" class="btn btn-success mr-2 mb-2">I'll attend</button>
+            <button type="submit" name="answer" value="declined" class="btn btn-outline-secondary mb-2">I can't attend</button>
+          </form>
+          {% if answer %}<p class="small text-muted mb-0">You can change your answer until the event starts.</p>{% endif %}
+        {% endif %}
+      {% endif %}
+    </div>
+  </div>
+</main>
+{% endblock %}

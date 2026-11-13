@@ -49,6 +49,12 @@ def attendance_type_key(attendee):
     return ((attendee.meta or {}).get('attendance_type') or '').strip().lower()
 
 
+def rsvp_key(attendee):
+    """'confirmed', 'declined' or '' (no reply yet) (#14)."""
+    answer = ((attendee.meta or {}).get('rsvp') or '').strip().lower()
+    return answer if answer in ('confirmed', 'declined') else ''
+
+
 def is_required_missed(attendee):
     return attendance_type_key(attendee) == 'required' and status_key(attendee) == KEY_NOT_ATTENDED
 
@@ -219,8 +225,13 @@ def summarize(attendees):
     teachers = set()
     people = set()
 
+    rsvps = {'confirmed': 0, 'declined': 0, '': 0}
+    no_shows = 0
     for a in attendees:
         people.add(person_key(a))
+        rsvps[rsvp_key(a)] += 1
+        if rsvp_key(a) == 'confirmed' and status_key(a) == KEY_NOT_ATTENDED:
+            no_shows += 1
         key = status_key(a)
         counts[key] += 1
         kind = attendance_type_key(a)
@@ -253,6 +264,11 @@ def summarize(attendees):
         'instructors': len(teachers),
         # Extra rows for a person already on the list (#10).
         'duplicates': invited - len(people),
+        # RSVPs (#14): a no-show confirmed and was marked Not Attended.
+        'confirmed': rsvps['confirmed'],
+        'declined': rsvps['declined'],
+        'no_reply': rsvps[''],
+        'no_shows': no_shows,
         'by_school': _breakdown(by_school),
         'by_course': _breakdown(by_course),
     })

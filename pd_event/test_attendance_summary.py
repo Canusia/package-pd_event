@@ -941,3 +941,119 @@ class PdOnOtherPagesTests(_Fixture):
         messages = hs_admin_dashboard(request)
         self.assertEqual(len(messages), 1)
         self.assertIn('1 teacher', messages[0].text)
+
+
+class RsvpTests(_Fixture):
+    """#14: invited vs confirmed vs declined."""
+
+    def _future(self):
+        Event.objects.filter(pk=self.event.pk).update(
+            start_time=timezone.now() + timedelta(days=3),
+            end_time=timezone.now() + timedelta(days=3, hours=2))
+        self.event.refresh_from_db()
+
+    def _rsvp(self, attendee, answer=None, user=None):
+        from django.contrib.auth.models import AnonymousUser
+        from .views.event import rsvp
+        token = attendee.rsvp_token()
+        if answer is None:
+            request = RequestFactory().get('/x')
+        else:
+            request = RequestFactory().post('/x', {'answer': answer})
+        request.user = user or AnonymousUser()
+        request._dont_enforce_csrf_checks = True
+        return rsvp(request, token)
+
+    def test_link_is_signed_and_login_free(self):
+        from .views.event import rsvp
+        self.assertFalse(getattr(rsvp, 'login_required', True))
+        self.assertIn(self.eve.rsvp_token(), self.eve.rsvp_url)
+        from django.core.signing import BadSignature  # noqa: F401
+        request = RequestFactory().get('/x')
+        from django.contrib.auth.models import AnonymousUser
+        request.user = AnonymousUser()
+        self.assertEqual(rsvp(request, 'not-a-token').status_code, 404)
+
+    def test_guest_confirms_and_declines(self):
+        self._future()
+        html = self._rsvp(self.eve).content.decode()
+        self.assertIn(self.event.name, html)
+        self._rsvp(self.eve, 'confirmed')
+        self.eve.refresh_from_db()
+        self.assertEqual(self.eve.meta['rsvp'], 'confirmed')
+        self.assertEqual(self.eve.meta['rsvp_by'], 'guest')
+        self._rsvp(self.eve, 'declined')
+        self.eve.refresh_from_db()
+        self.assertEqual(self.eve.meta['rsvp'], 'declined')
+
+    def test_no_answers_after_the_event_starts(self):
+        resp = self._rsvp(self.eve, 'confirmed')
+        self.eve.refresh_from_db()
+        self.assertNotIn('rsvp', self.eve.meta)
+        self.assertIn('already started', resp.content.decode())
+
+    def test_bad_answer_is_ignored(self):
+        self._future()
+        self._rsvp(self.eve, 'maybe')
+        self.eve.refresh_from_db()
+        self.assertNotIn('rsvp', self.eve.meta)
+
+    def test_summary_counts(self):
+        from .services.summary import event_summary
+        for guest, answer in ((self.ann, 'confirmed'), (self.bob, 'confirmed'), (self.cat, 'declined')):
+            guest.meta['rsvp'] = answer
+            guest.save()
+        s = event_summary(self.event)
+        self.assertEqual((s['confirmed'], s['declined'], s['no_reply'], s['no_shows']), (2, 1, 3, 1))
+
+    def test_ce_sets_rsvp(self):
+        from .views.event import set_rsvp
+        resp = self._post(set_rsvp, self.event.id, attendee=[str(self.dan.id), str(self.fay.id)],
+                          rsvp='declined')
+        self.assertEqual(json.loads(resp.content)['status'], 'success')
+        for guest in (self.dan, self.fay):
+            guest.refresh_from_db()
+            self.assertEqual((guest.meta['rsvp'], guest.meta['rsvp_by']), ('declined', 'ce'))
+        self._post(set_rsvp, self.event.id, attendee=[str(self.dan.id)], rsvp='')
+        self.dan.refresh_from_db()
+        self.assertNotIn('rsvp', self.dan.meta)
+
+    def test_feed_carries_rsvp(self):
+        from .views.event import attendees
+        self.eve.meta['rsvp'] = 'confirmed'
+        self.eve.save()
+        rows = {r['id']: r for r in json.loads(self._get(attendees, self.event.id).content)['data']}
+        self.assertEqual(rows[str(self.eve.id)]['rsvp'], 'confirmed')
+        self.assertEqual(rows[str(self.ann.id)]['rsvp'], '')
+
+    def test_instructor_api_has_rsvp_link_for_upcoming(self):
+        from .serializers import InstructorEventAttendeeSerializer
+        self._future()
+        data = InstructorEventAttendeeSerializer(self.eve).data
+        self.assertEqual(data['rsvp'], '')
+        self.assertIn(self.eve.rsvp_token(), data['rsvp_url'])
+
+    def test_email_form_offers_rsvp_url(self):
+        from .forms import EventEmailForm
+        self._future()
+        with mock.patch('pd_event.pd_event.forms.send_html_mail') as send:
+            form = EventEmailForm(self.event, 'send_email', {
+                'action': 'send_email', 'email_to': 'to_no_reply', 'subject': 'Join us',
+                'message': 'RSVP: {{rsvp_url}}'})
+            if form.is_valid():
+                request = RequestFactory().post('/x')
+                request.user = self.ce_user
+                form.save(request, self.event)
+        bodies = [c.args[1] for c in send.call_args_list]
+        self.assertTrue(any(self.eve.rsvp_token() in b for b in bodies), form.errors)
+
+
+class RsvpSummaryDisplayTests(_Fixture):
+    def test_rsvp_line_shows_once_anyone_replied(self):
+        from .views.event import event_summary_view
+        self.assertNotIn('no reply', self._get(event_summary_view, self.event.id).content.decode())
+        self.bob.meta['rsvp'] = 'confirmed'
+        self.bob.save()
+        html = self._get(event_summary_view, self.event.id).content.decode()
+        self.assertIn('1 confirmed', html)
+        self.assertIn('1 no-show', html)

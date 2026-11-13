@@ -13,6 +13,7 @@
           <th>Start</th>
           <th>End</th>
           <th>Course</th>
+          <th>RSVP</th>
           <th>Attendance</th>
           <th>PD Letter</th>
         </tr>
@@ -38,6 +39,21 @@ $(function () {
       { data: 'event.start_time' },
       { data: 'event.end_time' },
       { data: 'course' },
+      {
+        // Confirm or decline an upcoming event (#14).
+        data: 'rsvp_url',
+        orderable: false,
+        searchable: false,
+        render: function (url, type, row) {
+          let answer = {confirmed: '<span class="badge badge-success">Attending</span>',
+                        declined: '<span class="badge badge-secondary">Not attending</span>'}[row.rsvp] || '';
+          if (url) {
+            return answer + ' <a class="btn btn-sm btn-outline-primary" href="' + $('<div>').text(url).html() + '">' +
+              (row.rsvp ? 'Change' : 'Respond') + '</a>';
+          }
+          return answer || '<span class="text-muted">-</span>';
+        }
+      },
       {
         data: 'attendance_status',
         render: function (val) {
