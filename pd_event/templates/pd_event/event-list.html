@@ -32,6 +32,11 @@
                     <li class="nav-item">
                         <a class="nav-link active" data-toggle="tab" href="#all">All</a>
                     </li>
+                    {% if show_by_term %}
+                    <li class="nav-item">
+                        <a class="nav-link" data-toggle="tab" href="#by_term" id="tab_by_term">By Term</a>
+                    </li>
+                    {% endif %}
                     <li class="nav-item d-none">
                         <a class="nav-link" data-toggle="tab" href="#archived">Archived</a>
                     </li>
@@ -101,9 +106,16 @@
                                                 Type</th>
                                             <th data-data="term.label" searchable="1" data-name="term.label">Term
                                             </th>
-                                            <th data-data="start_time" searchable="1" data-name="start_time">Start Date/Time
+                                            <th data-data="start_time" searchable="1" data-name="start_time">Start / End
                                             </th>
-                                            <th data-data="end_time" searchable="1" data-name="end_time">End Date/Time</th>
+                                            <th data-data="delivery_mode" data-name="delivery_mode">Delivery</th>
+                                            <th data-data="pd_hour" data-name="pd_hour">PD Hrs</th>
+                                            <th data-data="num_invited" data-name="id">Invited</th>
+                                            <th data-data="num_attended" data-name="id">Attended</th>
+                                            <th data-data="num_not_attended" data-name="id">Not Attended</th>
+                                            <th data-data="num_not_marked" data-name="id">Not Marked</th>
+                                            <th data-data="attendance_rate" data-name="id">Rate</th>
+                                            <th data-data="attendance_status_label" data-name="id">Status</th>
                                             <th data-data="id" data-name='id'><span class="sr-only">Actions</span></th>
                                         </tr>
                                     </thead>
@@ -115,6 +127,13 @@
                                         <th></th>
                                         <th></th>
                                         <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
+                                        <th></th>
                                     </tfoot>
                                 </table>
                             </div>
@@ -122,9 +141,151 @@
                     </div>
                     <!-- end tab # records_active -->
 
+                    {% if show_by_term %}
+                    <div class="tab-pane" id="by_term">
+                        <div class="bg-white border border-top-0">
+                            <div class="col-12 pt-3 mb-3">
+                                <p class="small text-muted">One row per term. Rate is attended of invited. <em>Required missed</em> counts guests marked Not Attended for a required event; download the list to follow up. Open a term for its breakdown by event type, course and high school.</p>
+                                <table id="records_by_term" class="table table-striped" style="width:100%">
+                                    <thead>
+                                        <tr>
+                                            <th></th>
+                                            <th>Term</th>
+                                            <th class="text-right">Events</th>
+                                            <th class="text-right">Invited</th>
+                                            <th class="text-right">Attended</th>
+                                            <th>Rate</th>
+                                            <th class="text-right">Not Marked</th>
+                                            <th class="text-right">Required Missed</th>
+                                            <th class="text-right">PD Hours</th>
+                                            <th class="text-right">Instructors Reached</th>
+                                            <th><span class="sr-only">Actions</span></th>
+                                        </tr>
+                                    </thead>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+
                 </div>
                 <!-- end tab-content -->
                 <script>
+                    function pd_esc(value) {
+                        return $('<div>').text(value === null || value === undefined ? '' : String(value)).html()
+                            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                    }
+
+                    // Attended-of-invited, with a small bar (#9).
+                    function pd_rate_bar(rate, type) {
+                        if (type !== 'display') return rate === null ? -1 : rate;
+                        if (rate === null || rate === undefined) return '<span class="text-muted">–</span>';
+                        return '<div class="small">' + rate + '%</div>' +
+                            '<div class="progress" style="height: 5px; min-width: 60px;">' +
+                            '<div class="progress-bar bg-success" style="width: ' + rate + '%"></div></div>';
+                    }
+
+                    function pd_breakdown(title, rows) {
+                        let html = '<table class="table table-sm table-bordered bg-white small mb-2"><thead class="thead-light"><tr><th>' + pd_esc(title) +
+                            '</th><th class="text-right">Invited</th><th class="text-right">Attended</th><th class="text-right">Rate</th><th class="text-right">Required missed</th></tr></thead><tbody>';
+                        if (!rows.length) html += '<tr><td colspan="5" class="text-muted">None</td></tr>';
+                        rows.forEach(function (r) {
+                            html += '<tr><td>' + pd_esc(r.name) + '</td><td class="text-right">' + r.invited + '</td><td class="text-right">' + r.attended +
+                                '</td><td class="text-right">' + (r.rate === null ? '–' : r.rate + '%') + '</td><td class="text-right' +
+                                (r.required_missed ? ' text-danger font-weight-bold' : '') + '">' + r.required_missed + '</td></tr>';
+                        });
+                        return html + '</tbody></table>';
+                    }
+
+                    {% if show_by_term %}
+                    $(document).ready(function () {
+                        let by_term = null;
+                        $('#tab_by_term').on('shown.bs.tab', function () {
+                            if (by_term) { by_term.ajax.reload(null, false); return; }
+                            by_term = $('#records_by_term').DataTable({
+                                ajax: "{% url 'pd_event:events_by_term' %}",
+                                order: [],
+                                lengthMenu: [25, 50, 100],
+                                dom: 'B<"float-left mt-3 mb-3"l><"float-right mt-3"f><"row clear">rt<"row"<"col-6"i><"col-6 float-right"p>>',
+                                buttons: [{
+                                    extend: 'csv', className: 'btn btn-sm btn-primary text-white text-light',
+                                    text: '<i class="fas fa-file-csv text-white"></i>&nbsp;CSV',
+                                    exportOptions: {columns: [1, 2, 3, 4, 5, 6, 7, 8, 9], orthogonal: 'export'}
+                                }],
+                                columns: [
+                                    {
+                                        data: null, orderable: false, searchable: false, className: 'pd-term-toggle',
+                                        render: function () { return '<a href="#" title="Show breakdown"><i class="fa fa-plus-circle"></i></a>'; }
+                                    },
+                                    {data: 'term', render: function (d) { return pd_esc(d); }},
+                                    {data: 'events', className: 'text-right'},
+                                    {data: 'invited', className: 'text-right'},
+                                    {data: 'attended', className: 'text-right', render: function (d, type) { return type === 'display' ? '<span class="text-success">' + d + '</span>' : d; }},
+                                    {data: 'rate', render: function (d, type) { return pd_rate_bar(d, type); }},
+                                    {data: 'not_marked', className: 'text-right'},
+                                    {
+                                        data: 'required_missed', className: 'text-right',
+                                        render: function (d, type) {
+                                            return type === 'display' && d ? '<span class="text-danger font-weight-bold">' + d + '</span>' : d;
+                                        }
+                                    },
+                                    {data: 'pd_hours', className: 'text-right'},
+                                    {data: 'instructors', className: 'text-right'},
+                                    {
+                                        data: null, orderable: false, searchable: false,
+                                        render: function (d, type, row) {
+                                            let csv = "{% url 'pd_event:required_missed_csv' '00000000-0000-0000-0000-000000000000' %}".replace('00000000-0000-0000-0000-000000000000', row.term_id);
+                                            let html = '<a href="#" class="btn btn-sm btn-primary pd-term-events mb-1" data-code="' + pd_esc(row.term_code) + '">View Events</a> ';
+                                            if (row.required_missed)
+                                                html += '<a href="' + pd_esc(csv) + '" class="btn btn-sm btn-outline-danger mb-1" title="Instructors marked Not Attended for a required event"><i class="fas fa-file-csv"></i>&nbsp;Required Missed</a>';
+                                            return html;
+                                        }
+                                    }
+                                ]
+                            });
+
+                            // Drill down: a term's breakdowns and events.
+                            $('#records_by_term tbody').on('click', 'td.pd-term-toggle a', function (e) {
+                                e.preventDefault();
+                                let tr = $(this).closest('tr');
+                                let row = by_term.row(tr);
+                                if (row.child.isShown()) {
+                                    row.child.hide();
+                                    $(this).find('i').removeClass('fa-minus-circle').addClass('fa-plus-circle');
+                                    return;
+                                }
+                                let icon = $(this).find('i');
+                                let url = "{% url 'pd_event:events_by_term_detail' '00000000-0000-0000-0000-000000000000' %}".replace('00000000-0000-0000-0000-000000000000', row.data().term_id);
+                                $.getJSON(url, function (data) {
+                                    let events = '<table class="table table-sm table-bordered bg-white small mb-2"><thead class="thead-light"><tr><th>Event</th><th>Type</th><th>Start</th>' +
+                                        '<th class="text-right">Invited</th><th class="text-right">Attended</th><th class="text-right">Rate</th><th class="text-right">Not marked</th><th class="text-right">Required missed</th></tr></thead><tbody>';
+                                    data.events.forEach(function (ev) {
+                                        events += '<tr><td><a href="' + pd_esc(ev.url) + '">' + pd_esc(ev.name) + '</a></td><td>' + pd_esc(ev.event_type) + '</td><td>' + pd_esc(ev.start_time) +
+                                            '</td><td class="text-right">' + ev.invited + '</td><td class="text-right">' + ev.attended + '</td><td class="text-right">' +
+                                            (ev.rate === null ? '–' : ev.rate + '%') + '</td><td class="text-right">' + ev.not_marked + '</td><td class="text-right' +
+                                            (ev.required_missed ? ' text-danger font-weight-bold' : '') + '">' + ev.required_missed + '</td></tr>';
+                                    });
+                                    events += '</tbody></table>';
+                                    row.child('<div class="p-2"><div class="row">' +
+                                        '<div class="col-lg-4">' + pd_breakdown('By event type', data.by_event_type) + '</div>' +
+                                        '<div class="col-lg-4">' + pd_breakdown('By course', data.by_course) + '</div>' +
+                                        '<div class="col-lg-4">' + pd_breakdown('By high school', data.by_school) + '</div>' +
+                                        '</div>' + events + '</div>').show();
+                                    icon.removeClass('fa-plus-circle').addClass('fa-minus-circle');
+                                });
+                            });
+
+                            // View Events: the All tab, filtered to the term.
+                            $('#records_by_term tbody').on('click', 'a.pd-term-events', function (e) {
+                                e.preventDefault();
+                                $('form.filter select[name=term]').val($(this).attr('data-code'));
+                                $('a.nav-link[href="#all"]').tab('show');
+                                $('form.filter #id_btn_filter').trigger('click');
+                            });
+                        });
+                    });
+                    {% endif %}
+
                     var table
                     setInterval(function() {
 
@@ -212,43 +373,70 @@
                                 serverSide: true,
                                 processing: true,
                                 'lengthMenu': [30, 50, 100],
+                                'order': [[4, 'desc']],
                                 'columns': [
-                                    null,
                                     {
-                                        // 'searchable': false,
+                                        'responsivePriority': 1,
+                                        'render': function (data, type, row) { return pd_esc(row.name); }
+                                    },
+                                    {
                                         'orderable': false,
                                         'render': function (data, type, row, meta) {
-                                            return row.course_list
+                                            return pd_esc(row.course_list);
                                         }
                                     },
                                     {
-                                        // 'searchable': false,
-                                        // 'orderable': false,
-                                        
+                                        'render': function (data, type, row) { return pd_esc(row.event_type.name); }
                                     },
                                     {
-                                        // 'searchable': false,
-                                        // 'orderable': false,
-                                        
+                                        'responsivePriority': 6,
                                         'render': function(data, type, row, meta) {
-                                            return row.term.label
+                                            return pd_esc(row.term.label)
                                         }
                                     },
                                     {
-                                        // 'searchable': false,
-                                        // 'orderable': false,
-                                        
+                                        'responsivePriority': 5,
+                                        'render': function (data, type, row) {
+                                            if (type !== 'display') return row.start_time;
+                                            return pd_esc(row.start_time || '') + (row.end_time ? '<br><small class="text-muted">' + pd_esc(row.end_time) + '</small>' : '');
+                                        }
                                     },
                                     {
-                                        // 'searchable': false,
-                                        // 'orderable': false,
-                                        
+                                        'searchable': false,
+                                        'render': function (data, type, row) { return pd_esc(row.delivery_mode || ''); }
+                                    },
+                                    { 'searchable': false },
+                                    { 'searchable': false, 'orderable': false, 'className': 'text-right', 'responsivePriority': 4 },
+                                    {
+                                        'searchable': false, 'orderable': false, 'className': 'text-right', 'responsivePriority': 4,
+                                        'render': function (data, type) { return type === 'display' ? '<span class="text-success">' + data + '</span>' : data; }
+                                    },
+                                    { 'searchable': false, 'orderable': false, 'className': 'text-right' },
+                                    { 'searchable': false, 'orderable': false, 'className': 'text-right' },
+                                    {
+                                        'searchable': false,
+                                        'orderable': false,
+                                        'responsivePriority': 3,
+                                        'render': function (data, type, row) {
+                                            return pd_rate_bar(row.attendance_rate, type);
+                                        }
                                     },
                                     {
                                         'searchable': false,
                                         'orderable': false,
+                                        'responsivePriority': 2,
+                                        'render': function (data, type, row) {
+                                            if (type !== 'display') return row.attendance_status_label;
+                                            let cls = {'Upcoming': 'badge-info', 'Needs attendance': 'badge-warning', 'Complete': 'badge-success'}[row.attendance_status_label] || 'badge-light border';
+                                            return '<span class="badge ' + cls + '">' + pd_esc(row.attendance_status_label) + '</span>';
+                                        }
+                                    },
+                                    {
+                                        'searchable': false,
+                                        'orderable': false,
+                                        'responsivePriority': 1,
                                         'render': function (data, type, row, meta) {
-                                            return "<a class='btn btn-sm btn-primary' refresh-target='table' href='" + "{{urls.details_prefix}}" + row.id + "'>View Details</a>"
+                                            return "<a class='btn btn-sm btn-primary' refresh-target='table' href='" + "{{urls.details_prefix}}" + pd_esc(row.id) + "'>View Details</a>"
                                         }
                                     }
                                 ]

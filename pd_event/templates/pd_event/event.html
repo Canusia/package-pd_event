@@ -27,6 +27,7 @@
         </div>
 
         <div class="col-md-12 col-sm-12">
+            {% include 'pd_event/_event_summary.html' %}
             <ul class="nav nav-tabs">
                 <li class="nav-item">
                     <a class="nav-link active" data-toggle="tab" href="#details">Details</a>
@@ -209,7 +210,27 @@
                     <div class="bg-white border border-top-0">
                         <div class="col-12 pt-3 mb-3">
 
-                            <form action="" method="post">
+                            <div class="d-flex flex-wrap align-items-center mb-2" id="attendance_filters">
+                                <div class="btn-group btn-group-sm mr-2 mb-1 flex-wrap" role="group" aria-label="Filter attendees">
+                                    <button type="button" class="btn btn-outline-primary active" data-filter="all">All</button>
+                                    <button type="button" class="btn btn-outline-success" data-filter="attended">Attended</button>
+                                    <button type="button" class="btn btn-outline-danger" data-filter="not_attended">Not attended</button>
+                                    <button type="button" class="btn btn-outline-secondary" data-filter="not_marked">Not marked</button>
+                                    <button type="button" class="btn btn-outline-danger" data-filter="required_missed">Required missed</button>
+                                    <button type="button" class="btn btn-outline-info" data-filter="required">Required</button>
+                                    <button type="button" class="btn btn-outline-info" data-filter="optional">Optional</button>
+                                    <button type="button" class="btn btn-outline-warning" data-filter="letter_owed">Letter owed</button>
+                                </div>
+                                <select id="attendance_filter_school" class="form-control form-control-sm w-auto mr-2 mb-1" aria-label="Filter by high school">
+                                    <option value="">All high schools</option>
+                                </select>
+                                <select id="attendance_filter_course" class="form-control form-control-sm w-auto mr-2 mb-1" aria-label="Filter by course">
+                                    <option value="">All courses</option>
+                                </select>
+                                <span class="small text-muted ml-auto mb-1" id="attendance_progress"></span>
+                            </div>
+
+                            <form action="" method="post" id="frm_attendance">
                                 {% csrf_token %}
                                 <div class="table-responsive">
                                     <table style="width: 100%" class="table table-striped" id="event_attendee_list">
@@ -225,13 +246,14 @@
                                                     Attendance Type</th>
                                                 <th>Status</th>
                                                 <th>PD Hours / Participants</th>
+                                                <th>PD Letter</th>
                                                 <th>Note</th>
                                             </tr>
                                         </thead>
 
                                         <tfoot>
                                             <tr>
-                                                <td colspan="6">
+                                                <td colspan="8">
                                                     <input type="button" class="btn btn-sm btn-primary btn_mark_attendance"
                                                         data-attendance="attended" id="btn_mark_attended_selected"
                                                         value="Mark as Attended" name="mark_attended_selected">&nbsp;
@@ -239,10 +261,16 @@
                                                         data-attendance="not attended"
                                                         id="btn_mark_not_attended_selected" value="Mark as Not Attended"
                                                         name="mark_not_attended_selected">&nbsp;
+                                                    <input type="button" class="btn btn-sm btn-outline-secondary"
+                                                        id="btn_mark_unmarked_not_attended"
+                                                        value="Mark Everyone Unmarked as Not Attended">&nbsp;
                                                         <a href="{%url 'pd_event:export_attendee_list' record.id %}" class="btn btn-sm btn-info d-none">Export Attendee List</a>&nbsp;<input type="button" class="btn btn-sm btn-primary btn_send_pd_letter"
                                                         data-attendance="send_pd_letter"
                                                         id="btn_send_pd_letter" value="Send PD Letter"
                                                         name="send_pd_letter">&nbsp;
+                                                    <input type="button" class="btn btn-sm btn-outline-primary"
+                                                        id="btn_send_pd_letters_owed"
+                                                        value="Send Letters Still Owed">
                                                 </td>
                                             </tr>
                                         </tfoot>
@@ -326,6 +354,51 @@
 
                                                                 <script>
 
+                                                                    // Manage Attendance (#9): labels, filters, one-click marking.
+                                                                    function pd_esc(value) {
+                                                                        return $('<div>').text(value === null || value === undefined ? '' : String(value)).html()
+                                                                            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+                                                                    }
+
+                                                                    var pd_filter = {status: 'all', school: '', course: ''};
+                                                                    var PD_STATUS_BADGE = {attended: 'badge-success', not_attended: 'badge-danger', not_marked: 'badge-secondary'};
+
+                                                                    $.fn.dataTable.ext.search.push(function (settings, data, index, row) {
+                                                                        if (settings.nTable.id !== 'event_attendee_list') return true;
+                                                                        if (pd_filter.school && row.school !== pd_filter.school) return false;
+                                                                        if (pd_filter.course && row.course !== pd_filter.course) return false;
+                                                                        switch (pd_filter.status) {
+                                                                            case 'attended': case 'not_attended': case 'not_marked':
+                                                                                return row.status_key === pd_filter.status;
+                                                                            case 'required_missed': return row.required_missed;
+                                                                            case 'required': case 'optional':
+                                                                                return row.attendance_type_key === pd_filter.status;
+                                                                            case 'letter_owed': return row.gets_letter && !row.pd_letter_sent_on;
+                                                                        }
+                                                                        return true;
+                                                                    });
+
+                                                                    function set_attendance_filter(status) {
+                                                                        pd_filter.status = status || 'all';
+                                                                        $('#attendance_filters [data-filter]').removeClass('active')
+                                                                            .filter('[data-filter="' + pd_filter.status + '"]').addClass('active');
+                                                                        attendees.draw();
+                                                                    }
+
+                                                                    function fill_select(select, values) {
+                                                                        let current = $(select).val();
+                                                                        $(select).find('option:not(:first)').remove();
+                                                                        values.forEach(function (v) { $(select).append($('<option></option>').val(v).text(v)); });
+                                                                        $(select).val(values.indexOf(current) >= 0 ? current : '');
+                                                                        $(select).toggle(values.length > 1);
+                                                                    }
+
+                                                                    function refresh_summary() {
+                                                                        $.get("{% url 'pd_event:event_summary' record.id %}", function (html) {
+                                                                            $('#event_summary').replaceWith(html);
+                                                                        });
+                                                                    }
+
                                                                     var attendees = $("#event_attendee_list").DataTable();
                                                                     get_event_attendees();
                                                                     function get_event_attendees() {
@@ -334,70 +407,89 @@
                                                                         $.blockUI();
 
                                                                         attendees = $('#event_attendee_list').DataTable({
-                                                                            // serverSide: true,
                                                                             order: [[1, 'asc']],
                                                                             initComplete: function (settings, json) {
                                                                                 $.unblockUI();
+                                                                                let rows = (json && json.data) || [];
+                                                                                let unique = function (key) {
+                                                                                    return rows.map(function (r) { return r[key]; })
+                                                                                        .filter(function (v, i, all) { return v && all.indexOf(v) === i; }).sort();
+                                                                                };
+                                                                                fill_select('#attendance_filter_school', unique('school'));
+                                                                                fill_select('#attendance_filter_course', unique('course'));
+                                                                                let marked = rows.filter(function (r) { return r.status_key !== 'not_marked'; }).length;
+                                                                                $('#attendance_progress').text(rows.length ? marked + ' of ' + rows.length + ' marked' : '');
+                                                                            },
+                                                                            createdRow: function (tr, row) {
+                                                                                if (row.required_missed) $(tr).addClass('table-danger');
                                                                             },
                                                                             processing: true,
                                                                             ajax: "{%url 'pd_event:attendees' record.id%}",
-                                                                            lengthMenu: [50, 100],
+                                                                            lengthMenu: [50, 100, 250],
                                                                             columns: [
                                                                                 {
                                                                                     'searchable': false,
                                                                                     'orderable': false,
                                                                                     'render': function (data, type, row, meta) {
-                                                                                        return '<input type="checkbox" name="attendee" id="id_registration_' + row.id + '" value="' + row.id + '">';
+                                                                                        return '<input type="checkbox" name="attendee" id="id_registration_' + pd_esc(row.id) + '" value="' + pd_esc(row.id) + '">';
                                                                                     }
                                                                                 },
                                                                                 {
-                                                                                    'searchable': false,
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        if (type !== 'display') return row.name;
+                                                                                        let col = pd_esc(row.name);
+                                                                                        if (row.col_2) col += "<br><small>" + pd_esc(row.col_2) + "</small>";
+                                                                                        if (row.col_3) col += "<br><small>" + pd_esc(row.col_3) + "</small>";
+                                                                                        return col;
+                                                                                    }
+                                                                                },
+                                                                                {
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        return row.attendee_type_key == 'highschool' ? 'High School' : pd_esc(row.attendee_type);
+                                                                                    }
+                                                                                },
+                                                                                {
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        if (type !== 'display') return row.attendance_type;
+                                                                                        let cls = row.attendance_type_key === 'required' ? 'badge-primary' : 'badge-light border';
+                                                                                        return '<span class="badge ' + cls + '">' + pd_esc(row.attendance_type) + '</span>';
+                                                                                    }
+                                                                                },
+                                                                                {
+                                                                                    'render': function (data, type, row, meta) {
+                                                                                        if (type !== 'display') return row.attendance_status;
+                                                                                        let html = '<span class="badge ' + (PD_STATUS_BADGE[row.status_key] || 'badge-secondary') + '">' + pd_esc(row.attendance_status) + '</span>';
+                                                                                        if (row.required_missed) html += ' <span class="badge badge-danger">Required missed</span>';
+                                                                                        html += '<div class="btn-group btn-group-sm mt-1 d-block" role="group">';
+                                                                                        if (row.status_key !== 'attended')
+                                                                                            html += '<button type="button" class="btn btn-outline-success btn-sm btn_row_mark" title="Mark as attended" data-id="' + pd_esc(row.id) + '" data-attendance="attended"><i class="fa fa-check"></i></button>';
+                                                                                        if (row.status_key !== 'not_attended')
+                                                                                            html += '<button type="button" class="btn btn-outline-danger btn-sm btn_row_mark" title="Mark as not attended" data-id="' + pd_esc(row.id) + '" data-attendance="not attended"><i class="fa fa-times"></i></button>';
+                                                                                        return html + '</div>';
+                                                                                    }
+                                                                                },
+                                                                                {
                                                                                     'orderable': false,
                                                                                     'render': function (data, type, row, meta) {
-   let col = row.name
-   if(row.col_2 !== null) {
-    col += "<br><small>" + row.col_2 + "</small>"
-   }
-
-   if(row.col_3 !== null) {
-    col += "<br><small>" + row.col_3 + "</small>"
-   }
-   return col
+                                                                                        // High schools record participants; everyone else PD hours.
+                                                                                        if (row.attendee_type_key === 'highschool')
+                                                                                            return "<input type='text' class='form-control update_count' size='4' data-id='" + pd_esc(row.id) + "' data-key='participants' value='" + pd_esc(row.participants) + "' />";
+                                                                                        return "<input size='4' type='text' class='form-control update_count' data-id='" + pd_esc(row.id) + "' data-key='pd_hour' value='" + pd_esc(row.pd_hour) + "' />";
                                                                                     }
                                                                                 },
                                                                                 {
                                                                                     'render': function (data, type, row, meta) {
-                                                                                        if(row.attendee_type == 'Highschool')
-                                                                                            return 'High School';
-                                                                                        return row.attendee_type
+                                                                                        if (!row.gets_letter) return type === 'display' ? '<span class="text-muted">–</span>' : '';
+                                                                                        if (type !== 'display') return row.pd_letter_sent_on || 'Not sent';
+                                                                                        if (row.pd_letter_sent_on)
+                                                                                            return "<small>Sent " + pd_esc(row.pd_letter_sent_on) + "</small>&nbsp;<a title='Download PD letter' target='_blank' href='" + pd_esc(row.pd_letter) + "'><i class='fa fa-download'></i></a>";
+                                                                                        return '<small class="text-warning font-weight-bold">Not sent</small>';
                                                                                     }
                                                                                 },
                                                                                 {
+                                                                                    'orderable': false,
                                                                                     'render': function (data, type, row, meta) {
-                                                                                        return row.attendance_type
-                                                                                    }
-                                                                                },
-                                                                                {
-                                                                                    'render': function (data, type, row, meta) {
-                                                                                        return row.attendance_status
-                                                                                    }
-                                                                                },
-                                                                                {
-                                                                                    'render': function (data, type, row, meta) {
-                                                                                        if (row.attendee_type != 'highschool')
-                                                                                            var download_url = '';
-                                                                                            if(row.pd_letter_sent_on == '-') {
-                                                                                                return '';
-                                                                                            } else {
-                                                                                                download_url = "<a title='Download PD letter' target='_blank' href='" + row.pd_letter + "'><i class='fa fa-download'></i></a>"
-                                                                                            }
-                                                                                            return "<input size='4' type='text' class='form-control update_count' data-id='" + row.id + "' data-key='pd_hour' value='" + row.pd_hour + "' />" + "<small class='text-muted'>Letter Last Sent On - " + row.pd_letter_sent_on + "&nbsp;" + download_url + "</small>";
-                                                                                        return "<input type='text' class='update_count' size='4' data-id='" + row.id + "' data-key='participants' value='" + row.participants + "' />"
-                                                                                    }
-                                                                                },
-                                                                                {
-                                                                                    'render': function (data, type, row, meta) {
-                                                                                        return "<input type='text' class='form-control update_count' data-id='" + row.id + "' data-key='note' value='" + row.note + "' />"
+                                                                                        return "<input type='text' class='form-control update_count' data-id='" + pd_esc(row.id) + "' data-key='note' value='" + pd_esc(row.note) + "' />"
                                                                                     }
                                                                                 }
                                                                             ]
@@ -405,6 +497,74 @@
 
                                                                         return false;
                                                                     }
+
+                                                                    function post_attendance(url, data) {
+                                                                        data.push({name: 'csrfmiddlewaretoken', value: $('#frm_attendance [name=csrfmiddlewaretoken]').val()});
+                                                                        $.blockUI();
+                                                                        $.post({
+                                                                            url: url,
+                                                                            data: $.param(data),
+                                                                            dataType: 'json',
+                                                                            complete: function () { $.unblockUI(); },
+                                                                            success: function (response) {
+                                                                                if (response.status !== 'success')
+                                                                                    swal("", response.message, "warning");
+                                                                                get_event_attendees();
+                                                                                refresh_summary();
+                                                                            },
+                                                                            error: function (xhr) {
+                                                                                swal("", (xhr.responseJSON && xhr.responseJSON.message) || 'Something went wrong. Please try again.', "error");
+                                                                            }
+                                                                        });
+                                                                    }
+
+                                                                    jQuery(document).ready(function ($) {
+                                                                        $('#attendance_filters').on('click', '[data-filter]', function () {
+                                                                            set_attendance_filter($(this).attr('data-filter'));
+                                                                        });
+                                                                        $('#attendance_filter_school, #attendance_filter_course').on('change', function () {
+                                                                            pd_filter.school = $('#attendance_filter_school').val();
+                                                                            pd_filter.course = $('#attendance_filter_course').val();
+                                                                            attendees.draw();
+                                                                        });
+                                                                        // A summary card opens Manage Attendance filtered to its rows.
+                                                                        $(document).on('click', '.pd-summary-card', function (e) {
+                                                                            e.preventDefault();
+                                                                            $('a.nav-link[href="#manage_attendance"]').tab('show');
+                                                                            set_attendance_filter($(this).attr('data-filter'));
+                                                                        });
+                                                                        $(document).on('click', '.btn_row_mark', function () {
+                                                                            post_attendance("{% url 'pd_event:mark_attendance' record.id %}", [
+                                                                                {name: 'attendee', value: $(this).attr('data-id')},
+                                                                                {name: 'attendance_status', value: $(this).attr('data-attendance')}
+                                                                            ]);
+                                                                        });
+                                                                        $('#btn_mark_unmarked_not_attended').on('click', function () {
+                                                                            if (!confirm('Mark everyone who is not marked yet as Not Attended?')) return;
+                                                                            post_attendance("{% url 'pd_event:mark_attendance' record.id %}", [
+                                                                                {name: 'scope', value: 'unmarked'},
+                                                                                {name: 'attendance_status', value: 'not attended'}
+                                                                            ]);
+                                                                        });
+                                                                        $('#btn_send_pd_letters_owed').on('click', function () {
+                                                                            if (!confirm('Email a PD letter to everyone who attended and has not been sent one?')) return;
+                                                                            let url = "{% url 'pd_event:email_pd_letter' record.id %}";
+                                                                            $.blockUI();
+                                                                            $.post({
+                                                                                url: url,
+                                                                                data: $.param([{name: 'scope', value: 'owed'},
+                                                                                    {name: 'csrfmiddlewaretoken', value: $('#frm_attendance [name=csrfmiddlewaretoken]').val()}]),
+                                                                                dataType: 'json',
+                                                                                complete: function () { $.unblockUI(); },
+                                                                                success: function (response) {
+                                                                                    swal("", response.message, response.status === 'success' ? "success" : "warning");
+                                                                                    get_event_attendees();
+                                                                                    refresh_summary();
+                                                                                }
+                                                                            });
+                                                                        });
+                                                                        $(document).on('change', '.update_count[data-key=pd_hour]', refresh_summary);
+                                                                    });
 
                                                                     var tbl_event_guests = $('#tbl_event_guests').DataTable({
                                                                 order: [[1, 'asc']],
@@ -433,15 +593,10 @@
                                                                                 'searchable': false,
                                                                                 'orderable': false,
                                                                                 'render': function (data, type, row, meta) {
-                                                                                    let col = row.name
-   if(row.col_2 !== null) {
-    col += "<br><small>" + row.col_2 + "</small>"
-   }
-
-   if(row.col_3 !== null) {
-    col += "<br><small>" + row.col_3 + "</small>"
-   }
-   return col
+                                                                                    let col = pd_esc(row.name);
+                                                                                    if (row.col_2) col += "<br><small>" + pd_esc(row.col_2) + "</small>";
+                                                                                    if (row.col_3) col += "<br><small>" + pd_esc(row.col_3) + "</small>";
+                                                                                    return col;
                                                                                 }
                                                                             },
                                                                             {
@@ -490,6 +645,8 @@
                                                                                 $("input[name='select-all']").prop("checked", false);
                                                                                 get_event_guests()
                                                                                 get_event_attendees()
+                                                                                refresh_summary()
+                                                                                refresh_summary()
                                                                             }
                                                                         })
                                                                         return false;
@@ -545,6 +702,7 @@
 
                                                                                 get_event_guests()
                                                                                 get_event_attendees()
+                                                                                refresh_summary()
                                                                             }
                                                                         })
                                                                         return false;
@@ -695,6 +853,7 @@
 
                                                                                 get_event_guests()
                                                                                 get_event_attendees()
+                                                                                refresh_summary()
                                                                             }
                                                                         })
                                                                         return false;
@@ -758,6 +917,7 @@
                                     }
 
                                     get_event_attendees()
+                                    refresh_summary()
                                 }
                             })
                             return false;
@@ -792,6 +952,7 @@
 
                                                                                 $("input[name='select-all']").prop("checked", false);
                                                                                 get_event_attendees()
+                                                                                refresh_summary()
                                                                             }
                                                                         })
                                                                         return false;

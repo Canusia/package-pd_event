@@ -26,6 +26,10 @@ from ..views.event import (
     email_pd_letter,
     event_signin_sheet,
     send_reminder,
+    event_summary_view,
+    events_by_term,
+    events_by_term_detail,
+    required_missed_csv,
     delete as delete_event
 )
 from rest_framework import routers
@@ -58,6 +62,10 @@ urlpatterns = [
     path('event_type/add_new/', add_event_type, name='event_type_add_new'),
 
     path('', events, name='events'),
+    path('by_term/', events_by_term, name='events_by_term'),
+    path('by_term/<uuid:term_id>/', events_by_term_detail, name='events_by_term_detail'),
+    path('by_term/<uuid:term_id>/required_missed.csv', required_missed_csv,
+         name='required_missed_csv'),
     path('search_guest_list/', search_guest_list, name='search_guest_list'),
     path('event/add_new/', add_event, name='event_add_new'),
     path('event/delete/<uuid:record_id>', delete_event, name='delete_event'),
@@ -74,4 +82,5 @@ urlpatterns = [
     path('event/<uuid:record_id>/attendees/', attendees, name='attendees'),
     path('event/<uuid:record_id>/mark_attendance/', mark_attendance, name='mark_attendance'),
     path('event/<uuid:record_id>/update_count/', update_count, name='update_count'),
+    path('event/<uuid:record_id>/summary/', event_summary_view, name='event_summary'),
 ]

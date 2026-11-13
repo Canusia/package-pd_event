@@ -25,12 +25,13 @@ class EventSerializer(serializers.ModelSerializer):
     event_type = EventTypeSerializer()
     term = TermSerializer()
 
+    # 12-hour, as the event form shows it (#9).
     start_time = serializers.DateTimeField(
-        format='%m/%d/%Y %H:%M'
+        format='%m/%d/%Y %I:%M %p'
     )
 
     end_time = serializers.DateTimeField(
-        format='%m/%d/%Y %H:%M'
+        format='%m/%d/%Y %I:%M %p'
     )
 
     course_list = serializers.ListField()
@@ -38,9 +39,59 @@ class EventSerializer(serializers.ModelSerializer):
         many=True,
         read_only=True
     )
+
+    # Guest counts and status (#9), from EventViewSet's annotations.
+    num_invited = serializers.SerializerMethodField()
+    num_attended = serializers.SerializerMethodField()
+    num_not_attended = serializers.SerializerMethodField()
+    num_not_marked = serializers.SerializerMethodField()
+    attendance_rate = serializers.SerializerMethodField()
+    attendance_status_label = serializers.SerializerMethodField()
+
     class Meta:
         model = Event
         fields = '__all__'
+        # The datatables format drops fields that are not table columns; the
+        # list's Start / End cell also shows end_time.
+        datatables_always_serialize = ('id', 'end_time')
+
+    @staticmethod
+    def _counts(obj):
+        # att_* names: Event already has num_* properties.
+        invited = getattr(obj, 'att_invited', None)
+        if invited is None:  # not annotated: count here
+            invited = obj.num_guests
+            attended, not_attended = obj.num_attendees, obj.num_not_attended
+        else:
+            attended, not_attended = obj.att_attended, obj.att_not_attended
+        return invited, attended, not_attended, invited - attended - not_attended
+
+    def get_num_invited(self, obj):
+        return self._counts(obj)[0]
+
+    def get_num_attended(self, obj):
+        return self._counts(obj)[1]
+
+    def get_num_not_attended(self, obj):
+        return self._counts(obj)[2]
+
+    def get_num_not_marked(self, obj):
+        return self._counts(obj)[3]
+
+    def get_attendance_rate(self, obj):
+        from .services.summary import rate
+        invited, attended, _, _ = self._counts(obj)
+        return rate(attended, invited)
+
+    def get_attendance_status_label(self, obj):
+        """Upcoming / Needs attendance / Complete / No guests."""
+        from django.utils import timezone
+        if obj.start_time and obj.start_time > timezone.now():
+            return 'Upcoming'
+        invited, _, _, not_marked = self._counts(obj)
+        if not invited:
+            return 'No guests'
+        return 'Needs attendance' if not_marked else 'Complete'
 
 
 

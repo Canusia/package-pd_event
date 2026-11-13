@@ -79,7 +79,18 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
                     self.request.GET.get('end_time'), '%m/%d/%Y %H:%M'
                 )
             )
-        return records
+
+        # Guest counts for the list (#9). distinct: the course filter joins
+        # the courses M2M, which would otherwise multiply the rows counted.
+        from django.db.models import Count
+        attendee_id = 'eventattendee__id'
+        return records.select_related('event_type', 'term').annotate(
+            att_invited=Count(attendee_id, distinct=True),
+            att_attended=Count(attendee_id, distinct=True, filter=Q(
+                eventattendee__meta__attendance_status='attended')),
+            att_not_attended=Count(attendee_id, distinct=True, filter=Q(
+                eventattendee__meta__attendance_status='not attended')),
+        )
 
 def remove_upload(request, record_id):
     try:
@@ -117,11 +128,22 @@ def email_pd_letter(request, record_id):
 
     event = Event.objects.get(id=record_id)
     attendee_ids = request.POST.getlist('attendee', None)
-    
-    attendees = EventAttendee.objects.filter(
-        event=event,
-        id__in=attendee_ids
-    )
+
+    if request.POST.get('scope') == 'owed':
+        # Everyone who attended and has not been sent a letter (#9).
+        from ..services.summary import gets_letter, letter_sent_on
+        attendees = [a for a in EventAttendee.objects.filter(event=event)
+                     if gets_letter(a) and not letter_sent_on(a)]
+        if not attendees:
+            return JsonResponse({
+                'status': 'warning',
+                'message': 'Every attendee who attended has already been sent a letter.'
+            })
+    else:
+        attendees = EventAttendee.objects.filter(
+            event=event,
+            id__in=attendee_ids
+        )
 
     if not attendees:
         return JsonResponse({
@@ -131,7 +153,7 @@ def email_pd_letter(request, record_id):
 
     sent_count = 0
     for a in attendees:
-        if a.meta['attendance_status'] == 'attended':    
+        if (a.meta or {}).get('attendance_status') == 'attended':
             if a.send_pd_letter():
                 a.meta['pd_letter_sent_on'] = datetime.datetime.now().strftime('%m/%d/%Y')
                 a.save()
@@ -314,10 +336,22 @@ def mark_attendance(request, record_id):
     attendees = request.POST.getlist('attendee', None)
     attendance_status = request.POST.get('attendance_status')
 
-    attendees = EventAttendee.objects.filter(
-        event=event,
-        id__in=attendees
-    )
+    if request.POST.get('scope') == 'unmarked':
+        # "Mark everyone still unmarked as not attended" (#9). Only that
+        # direction: marking a whole list as attended must be a choice.
+        if attendance_status != 'not attended':
+            return JsonResponse({
+                'status': 'error',
+                'message': 'Only "Not Attended" can be applied to everyone unmarked.'
+            }, status=400)
+        from ..services.summary import KEY_NOT_MARKED, status_key
+        attendees = [a for a in EventAttendee.objects.filter(event=event)
+                     if status_key(a) == KEY_NOT_MARKED]
+    else:
+        attendees = EventAttendee.objects.filter(
+            event=event,
+            id__in=attendees
+        )
     for a in attendees:
         a.meta['attendance_status'] = attendance_status
         if attendance_status == 'not attended':
@@ -475,10 +509,10 @@ def toggle_attendee(request, record_id):
     })
 
 def attendees(request, record_id):
+    from ..services import summary as att
+
     record = get_object_or_404(Event, pk=record_id)
-    attendees = EventAttendee.objects.filter(
-        event=record
-    )
+    attendees = att.event_attendees(record)
 
     result = {'data': []}
     for a in attendees:
@@ -510,17 +544,26 @@ def attendees(request, record_id):
             )
             name = f'{attendee.name}'
 
+        school, course = att.school_and_course(a)
+        key = att.status_key(a)
         result['data'].append(
             {
                 'id': a.id,
                 'attendee_type': a.type.replace('_', ' ').title(),
+                'attendee_type_key': a.type,
                 'name': name,
                 'col_2': col_2,
                 'col_3': col_3,
-                'attendance_status': a.meta.get('attendance_status', '').title(),
-                'attendance_type': a.meta.get('attendance_type').replace('_', ' ').title(),
+                'school': school,
+                'course': course,
+                'attendance_status': att.STATUS_LABELS[key],
+                'status_key': key,
+                'attendance_type': (a.meta.get('attendance_type') or '').replace('_', ' ').title(),
+                'attendance_type_key': att.attendance_type_key(a),
+                'required_missed': att.is_required_missed(a),
                 'pd_hour': a.meta.get('pd_hour'),
-                'pd_letter_sent_on': a.meta.get('pd_letter_sent_on', '-'),
+                'pd_letter_sent_on': att.letter_sent_on(a),
+                'gets_letter': att.gets_letter(a),
                 'pd_letter': a.pd_url,
                 'note': a.meta.get('note', ''),
                 'participants': a.meta.get('participants'),
@@ -727,8 +770,64 @@ def detail(request, record_id):
             'read_only': read_only,
             'menu': menu,
             'notes': notes,
+            'summary': event_summary(record),
             'record': record
         })
+
+
+def event_summary(record):
+    from ..services.summary import event_summary as summarize_event
+    return summarize_event(record)
+
+
+def event_summary_view(request, record_id):
+    """The summary cards alone, re-fetched after attendance changes (#9)."""
+    record = get_object_or_404(Event, pk=record_id)
+    if not (user_has_cis_role(request.user) or user_has_faculty_role(request.user)):
+        raise PermissionDenied
+    return render(request, 'pd_event/_event_summary.html', {
+        'summary': event_summary(record), 'record': record})
+
+
+def _ce_only(request):
+    if not user_has_cis_role(request.user):
+        raise PermissionDenied
+
+
+def events_by_term(request):
+    """The By Term tab on the events list: one row per term (#9)."""
+    _ce_only(request)
+    from ..services.summary import by_term
+    return JsonResponse({'data': by_term()})
+
+
+def events_by_term_detail(request, term_id):
+    """A term's breakdowns and events, for the By Term drill-down."""
+    _ce_only(request)
+    from ..services.summary import term_detail
+    return JsonResponse(term_detail(get_object_or_404(Term, pk=term_id)))
+
+
+def required_missed_csv(request, term_id):
+    """Instructors marked Not Attended on a required event in the term."""
+    _ce_only(request)
+    from ..services.summary import person, required_missed, school_and_course
+    term = get_object_or_404(Term, pk=term_id)
+
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = (
+        f'attachment; filename="required-missed-{term.code}.csv"')
+    writer = csv.writer(response)
+    writer.writerow(['Last Name', 'First Name', 'Email', 'High School', 'Course',
+                     'Event', 'Event Type', 'Event Date'])
+    for a in required_missed(term):
+        school, course = school_and_course(a)
+        event = a.event
+        writer.writerow([
+            *person(a), school, course, event.name or '', event.event_type.name,
+            event.start_time_local.strftime('%m/%d/%Y') if event.start_time else '',
+        ])
+    return response
 
 def add_new(request):
     '''
@@ -862,6 +961,8 @@ def index(request):
             'terms': Term.objects.all().order_by('-code'),
             'courses': Course.objects.all().order_by('name'),
             'event_types': EventType.objects.all().order_by('name'),
-            'api_url': '/ce/events/api/events?format=datatables'
+            'api_url': '/ce/events/api/events?format=datatables',
+            # The By Term tab reads CE-only endpoints (#9).
+            'show_by_term': user_has_cis_role(request.user),
         }
     )

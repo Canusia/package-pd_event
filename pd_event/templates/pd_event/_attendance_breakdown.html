@@ -1,0 +1,22 @@
+{% comment %}
+One breakdown table (#9). Context: title, rows (services.summary._breakdown):
+least engaged first.
+{% endcomment %}
+<table class="table table-sm table-bordered bg-white small mb-2">
+  <thead class="thead-light">
+    <tr><th>{{ title }}</th><th class="text-right">Invited</th><th class="text-right">Attended</th><th class="text-right">Rate</th><th class="text-right">Required missed</th></tr>
+  </thead>
+  <tbody>
+    {% for row in rows %}
+    <tr>
+      <td>{{ row.name }}</td>
+      <td class="text-right">{{ row.invited }}</td>
+      <td class="text-right">{{ row.attended }}</td>
+      <td class="text-right">{% if row.rate is None %}–{% else %}{{ row.rate }}%{% endif %}</td>
+      <td class="text-right{% if row.required_missed %} text-danger font-weight-bold{% endif %}">{{ row.required_missed }}</td>
+    </tr>
+    {% empty %}
+    <tr><td colspan="5" class="text-muted">No instructor guests.</td></tr>
+    {% endfor %}
+  </tbody>
+</table>
