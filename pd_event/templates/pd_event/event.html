@@ -761,19 +761,26 @@
 
                                                                             $("#guest_list_results_container").addClass('d-none');
 
-                                                                            $('#div_id_cohort, #div_id_course, #div_id_instructor_course_status, #div_id_since, #div_id_fac_assistant').hide()
+                                                                            // The filters each guest type searches by (#11, #12).
+                                                                            let all = '#div_id_cohort, #div_id_course, #div_id_teaching_term, #div_id_highschool, #div_id_district, #div_id_instructor_course_status, #div_id_since';
+                                                                            let shown = {
+                                                                                instructor: '#div_id_course, #div_id_teaching_term, #div_id_highschool, #div_id_district, #div_id_instructor_course_status, #div_id_since',
+                                                                                highschool_admin: '#div_id_highschool, #div_id_district',
+                                                                                faculty: '#div_id_course, #div_id_cohort',
+                                                                                cohort_participant: '#div_id_cohort'
+                                                                            }[a_type] || '';
+                                                                            $(all).hide();
+                                                                            $(shown).show();
 
-                                                                            if (a_type == 'instructor')
-                                                                                $('#div_id_cohort, #div_id_course, #div_id_instructor_course_status, #div_id_since').show()
-
-                                                                            if (a_type == 'cohort_participant')
-                                                                                $('#div_id_cohort').show()
-
-                                                                            if (a_type == 'faculty')
-                                                                                $('#div_id_cohort, #div_id_fac_assistant').show()
+                                                                            let headings = {
+                                                                                highschool_admin: ['High School(s)', 'Position(s)', 'Email', ''],
+                                                                                faculty: ['', '', '', ''],
+                                                                                cohort_participant: ['', '', '', '']
+                                                                            }[a_type] || ['High School', 'Course', 'Status', 'Since'];
+                                                                            $('#guest_list_results thead th').slice(2).each(function (i) { $(this).text(headings[i]); });
                                                                         }
 
-                                                                        $('#div_id_fac_assistant').hide()
+                                                                        update_filter.call($('#id_attendee_type'));
 
                                                                         var table = $('#guest_list_results').DataTable()
                                                                         let cohort = $('#id_cohort')

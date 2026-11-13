@@ -66,11 +66,17 @@ def pd_hours(attendee):
 
 
 def gets_letter(attendee):
-    """A PD letter is owed to an instructor who attended. Only instructor
-    rows carry the course certificate that EventAttendee.send_pd_letter()
-    reads, so faculty and high school rows get none."""
-    return (attendee.type == 'instructor' and bool(attendee.course_certificate_id)
-            and status_key(attendee) == KEY_ATTENDED)
+    """A PD letter is owed to a person guest who attended (#12): an
+    instructor with a course certificate, or high school personnel, faculty
+    or a cohort participant whose record still exists. High school rows
+    record a head count, not a person."""
+    if status_key(attendee) != KEY_ATTENDED:
+        return False
+    if attendee.type == 'instructor':
+        return bool(attendee.course_certificate_id)
+    if attendee.type in ('highschool_admin', 'cohort_participant', 'faculty'):
+        return attendee.recipient() is not None
+    return False
 
 
 def letter_sent_on(attendee):

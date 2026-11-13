@@ -13,6 +13,7 @@ from django.utils.safestring import mark_safe
 from cis.models.course import Cohort, Course
 from cis.models.teacher import Teacher, TeacherHighSchool, TeacherCourseCertificate
 from cis.models.faculty import FacultyCoordinator
+from .models import format_event_time
 from .models import (
     EventType,
     Event,
@@ -108,43 +109,35 @@ class EventEmailForm(forms.Form):
 
         to_list = []
         for attendee in attendees:
-
-            if attendee.type == 'highschool':
-                return False
+            # Every person guest (#12); a high school row is a head count.
+            person = attendee.recipient()
+            if not person or not person['emails']:
+                continue
 
             message = Template(data.get('message', ''))
             subject = Template(data.get('subject', ''))
 
-            attendee_info = attendee.get_info()
             context = Context({
-                'attendee_first_name' : attendee.course_certificate.teacher_highschool.teacher.user.first_name,
-                'attendee_last_name' : attendee.course_certificate.teacher_highschool.teacher.user.last_name,
+                'attendee_first_name' : person['first_name'],
+                'attendee_last_name' : person['last_name'],
                 'courses_name' : event.sexy_courses,
                 'event_term' : str(event.term),
-                'event_start_date_time' : event.start_time_local.strftime('%m/%d/%Y %I:%m %p'),
-                'event_end_date_time' : event.end_time_local.strftime('%m/%d/%Y %I:%m %p'),
+                'event_start_date_time' : format_event_time(event.start_time),
+                'event_end_date_time' : format_event_time(event.end_time),
                 'description' : event.description,
-                'pd_letter_url' : attendee.pd_url,  
+                'pd_letter_url' : attendee.pd_url,
                 'pd_note' : attendee.meta.get('note'),
             })
 
             if data.get('email_to') == 'to_attendees':
-                if attendee.meta['attendance_status'] == 'attended':    
+                if (attendee.meta or {}).get('attendance_status') == 'attended':
                     attendee.meta['pd_letter_sent_on'] = datetime.datetime.now().strftime('%m/%d/%Y')
                     attendee.save()
 
             text_body = message.render(context)
             subject = subject.render(context)
 
-            to = [
-                attendee.course_certificate.teacher_highschool.teacher.user.email
-            ]
-
-            if attendee.course_certificate.teacher_highschool.teacher.user.alt_email:
-                to.append(attendee.course_certificate.teacher_highschool.teacher.user.alt_email)
-
-            if attendee.course_certificate.teacher_highschool.teacher.user.secondary_email:
-                to.append(attendee.course_certificate.teacher_highschool.teacher.user.secondary_email)
+            to = person['emails']
 
             if getattr(settings, 'DEBUG') == True:
                 to = [
@@ -217,7 +210,26 @@ class EventEmailForm(forms.Form):
 
 class EventAttendeeFilterForm(forms.Form):
     """Guest search. Any mix of course, term taught, high school and
-    district; at least one is needed (#11)."""
+    district; at least one is needed (#11). Other guest types (#12): high
+    school personnel by school or district, faculty by course or subject,
+    cohort participants by subject."""
+
+    attendee_type = forms.ChoiceField(
+        choices=[
+            ('instructor', 'Instructors'),
+            ('highschool_admin', 'High School Personnel'),
+            ('faculty', 'Faculty'),
+            ('cohort_participant', 'Cohort Participants'),
+        ],
+        initial='instructor',
+        label='Guest type'
+    )
+
+    cohort = forms.ModelMultipleChoiceField(
+        queryset=None,
+        required=False,
+        label='Subject(s)'
+    )
 
     course = forms.ModelMultipleChoiceField(
         queryset=None,
@@ -279,6 +291,7 @@ class EventAttendeeFilterForm(forms.Form):
         self.fields['teaching_term'].initial = None if event.courses.exists() else event.term_id
         self.fields['highschool'].queryset = picker_queryset()
         self.fields['district'].queryset = District.objects.order_by('name')
+        self.fields['cohort'].queryset = Cohort.objects.order_by('name')
         self.fields['instructor_course_status'].initial = [
             value for value, _ in TeacherCourseCertificate.STATUS_OPTIONS
             if value.lower().startswith('teaching')]

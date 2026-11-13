@@ -553,3 +553,117 @@ class GuestSearchTests(_Fixture):
             self.assertIn(name, form.fields)
         self.assertIn('Teaching', form.fields['instructor_course_status'].initial)
         self.assertNotIn('Inactive', form.fields['instructor_course_status'].initial)
+
+
+class OtherGuestTypesTests(_Fixture):
+    """#12: high school personnel, faculty and cohort participants as guests."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from cis.models.faculty import FacultyCoordinator
+        from cis.models.course import CourseAdministrator
+        from cis.models.highschool_administrator import (
+            HSAdministrator, HSAdministratorPosition, HSPosition)
+        for name in ('highschool_admin', 'faculty'):
+            Group.objects.get_or_create(name=name)
+
+        def user(first):
+            return CustomUser.objects.create_user(
+                username=_u(first), email=f'{first.lower()}-{_u("e")}@x.com', password='x',
+                first_name=first, last_name='Staff')
+
+        cls.counselor_user = user('Cora')
+        cls.hsadmin = HSAdministrator.objects.create(user=cls.counselor_user)
+        HSAdministratorPosition.objects.create(
+            hsadmin=cls.hsadmin, highschool=cls.north,
+            position=HSPosition.objects.create(name=_u('Counselor')), status='Active')
+        retired = HSAdministrator.objects.create(user=user('Rita'))
+        HSAdministratorPosition.objects.create(
+            hsadmin=retired, highschool=cls.north,
+            position=HSPosition.objects.create(name=_u('Principal')), status='Inactive')
+
+        cls.liaison_user = user('Liam')
+        cls.liaison = FacultyCoordinator.objects.create(user=cls.liaison_user)
+        CourseAdministrator.objects.create(course=cls.eng, user=cls.liaison_user)
+
+    def _search(self, **params):
+        from .views.event import search_guest_list
+        request = RequestFactory().get('/x', params)
+        request.user = self.ce_user
+        return json.loads(search_guest_list(request).content)['data']
+
+    def _add(self, attendee_type, record_id):
+        from .views.event import add_attendee
+        return self._post(add_attendee, self.event.id, attendee=str(record_id),
+                          attendance_type='required', type=attendee_type)
+
+    def test_search_high_school_personnel_by_school(self):
+        rows = self._search(attendee_type='highschool_admin', highschool=[str(self.north.id)])
+        self.assertEqual([(r['id'], r['name']) for r in rows],
+                         [(str(self.hsadmin.id), 'Staff, Cora')])
+        self.assertIn('North High', rows[0]['col_2'])
+
+    def test_search_faculty_by_course(self):
+        rows = self._search(attendee_type='faculty', course=[str(self.eng.id)])
+        self.assertEqual([r['id'] for r in rows], [str(self.liaison.id)])
+
+    def test_add_personnel_once(self):
+        self._add('highschool_admin', self.hsadmin.id)
+        self._add('highschool_admin', self.hsadmin.id)
+        rows = EventAttendee.objects.filter(event=self.event, type='highschool_admin')
+        self.assertEqual(rows.count(), 1)
+        self.assertEqual(rows[0].meta['id'], str(self.hsadmin.id))
+        self.assertEqual(float(rows[0].meta['pd_hour']), 3.0)
+
+    def test_unknown_type_is_refused(self):
+        resp = self._add('superuser', self.hsadmin.id)
+        self.assertEqual(json.loads(resp.content)['status'], 'error')
+        self.assertFalse(EventAttendee.objects.filter(event=self.event, type='superuser').exists())
+
+    def test_feed_and_info_name_personnel(self):
+        from .views.event import attendees
+        self._add('highschool_admin', self.hsadmin.id)
+        row = EventAttendee.objects.get(event=self.event, type='highschool_admin')
+        self.assertEqual(row.get_info()['first_name'], 'Cora')
+        feed = json.loads(self._get(attendees, self.event.id).content)['data']
+        mine = [r for r in feed if r['attendee_type_key'] == 'highschool_admin']
+        self.assertEqual(mine[0]['name'], 'Staff, Cora')
+        self.assertEqual(mine[0]['attendee_type'], 'High School Personnel')
+
+    def test_pd_letter_goes_to_faculty(self):
+        self._add('faculty', self.liaison.id)
+        row = EventAttendee.objects.get(event=self.event, type='faculty')
+        row.meta['attendance_status'] = ATTENDED
+        row.save()
+        with mock.patch('pd_event.pd_event.models.send_html_mail') as send:
+            self.assertTrue(row.send_pd_letter())
+        self.assertEqual(send.call_args.args[4] if len(send.call_args.args) > 4
+                         else send.call_args.kwargs.get('recipient_list'),
+                         [self.liaison_user.email])
+
+    def test_letters_owed_include_personnel_and_faculty(self):
+        from .services.summary import event_summary
+        for kind, rid in (('faculty', self.liaison.id), ('highschool_admin', self.hsadmin.id)):
+            self._add(kind, rid)
+        for row in EventAttendee.objects.filter(event=self.event, type__in=['faculty', 'highschool_admin']):
+            row.meta['attendance_status'] = ATTENDED
+            row.save()
+        self.assertEqual(event_summary(self.event)['letters_owed'], 3)  # Cat + the two
+
+    def test_pd_letter_pdf_for_personnel(self):
+        from .views.event import pd_letter
+        self._add('highschool_admin', self.hsadmin.id)
+        row = EventAttendee.objects.get(event=self.event, type='highschool_admin')
+        with mock.patch('pdfkit.from_string', return_value=b'%PDF') as to_pdf, \
+                mock.patch('cis.settings.pd_event.pd_event.from_db',
+                           return_value={'pd_template': '<p>{{attendee_first_name}} {{course}}</p>'}):
+            resp = self._get(pd_letter, row.id)
+        self.assertEqual(resp.status_code, 200)
+        self.assertIn('<p>Cora </p>', to_pdf.call_args.args[0])
+
+    def test_email_times_use_minutes(self):
+        from .models import format_event_time
+        from datetime import datetime
+        self.assertEqual(format_event_time(timezone.make_aware(datetime(2026, 11, 3, 14, 5))),
+                         '11/03/2026 02:05 PM')

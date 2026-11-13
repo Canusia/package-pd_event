@@ -222,21 +222,9 @@ def pd_letter(request, attendance_id):
 
     pd_template = pd_templates.get('pd_template', '')
 
-    attendee_info = attendee.get_info()
+    # Any guest type (#12); the same values as the PD letter email.
     pd_template = Template(pd_template)
-    pd_html = pd_template.render(Context({
-        'attendee_first_name' : attendee.course_certificate.teacher_highschool.teacher.user.first_name,
-        'attendee_last_name' : attendee.course_certificate.teacher_highschool.teacher.user.last_name,
-        'course' : attendee.course_certificate.course.name,
-        'term': attendee.event.term,
-        'earned_pd_hour': attendee.meta.get('pd_hour'),
-        'start_date_time': timezone.localtime(attendee.event.start_time).strftime('%m/%d/%Y %H:%M'),
-        'end_date_time': timezone.localtime(attendee.event.end_time).strftime('%m/%d/%Y %H:%M'),  
-        'event_type': attendee.event.event_type,
-        'pd_note': attendee.meta.get('note'),
-        'delivery_mode': attendee.event.delivery_mode,
-        'description': attendee.event.description
-    }))
+    pd_html = pd_template.render(Context(attendee.letter_context()))
 
     html = template.render({'main_content': pd_html})
     pdf = pdfkit.from_string(html, False, options)
@@ -385,8 +373,14 @@ def add_attendee(request, record_id):
 
     event = Event.objects.get(id=record_id)
     attendees = request.POST.getlist('attendee', None)
-    attendee_type = 'instructor' # request.POST.get('type', 'instructor')
+    attendee_type = request.POST.get('type') or 'instructor'
     attendance_type = request.POST.get('attendance_type')
+
+    if attendee_type not in EventAttendee.PERSON_TYPES:
+        return JsonResponse({
+            'status': 'error',
+            'message': 'Unknown guest type.'
+        })
 
     if not attendees:
         return JsonResponse({
@@ -404,8 +398,10 @@ def add_attendee(request, record_id):
                     course_certificate__certificate_id=r,
                     event=event
                 ).exists():
-                    print('2')
                     continue
+            elif EventAttendee.objects.filter(
+                    event=event, type=attendee_type, meta__id=str(r)).exists():
+                continue
 
             ea = EventAttendee(
                 event=event
@@ -422,7 +418,7 @@ def add_attendee(request, record_id):
                 
             ea.meta['attendance_type'] = attendance_type
             ea.meta['attendance_status'] = 'N/A'
-            if ea.type in ['instructor', 'cohort_participant', 'faculty']:
+            if ea.type in EventAttendee.PERSON_TYPES:
                 ea.meta['pd_hour'] = event.pd_hour
             else:
                 ea.meta['participants'] = 0
@@ -541,28 +537,22 @@ def attendees(request, record_id):
                 # Listed rather than skipped, so the table agrees with the
                 # summary counts and can still be marked or removed (#9).
                 name = '(instructor record missing)'
-        elif a.type == 'faculty':
-            attendee = FacultyCoordinator.objects.get(
-                pk=a.meta['id']
-            )
-            name = f'{attendee.user.last_name}, {attendee.user.first_name}'
-        elif a.type == 'cohort_participant':
-            attendee = CohortParticipant.objects.get(
-                pk=a.meta['id']
-            )
-            name = f'{attendee.user.last_name}, {attendee.user.first_name}'
+        elif a.type in ('faculty', 'cohort_participant', 'highschool_admin'):
+            info = a.get_info()
+            name = (f"{info.get('last_name')}, {info.get('first_name')}"
+                    if info.get('attendee') else '(record missing)')
+            if a.type == 'highschool_admin' and info.get('attendee'):
+                col_2 = ', '.join(_personnel_schools(info['attendee']))
         elif a.type == 'highschool':
-            attendee = HighSchool.objects.get(
-                pk=a.meta['id']
-            )
-            name = f'{attendee.name}'
+            attendee = HighSchool.objects.filter(pk=a.meta.get('id')).first()
+            name = attendee.name if attendee else '(record missing)'
 
         school, course = att.school_and_course(a)
         key = att.status_key(a)
         result['data'].append(
             {
                 'id': a.id,
-                'attendee_type': a.type.replace('_', ' ').title(),
+                'attendee_type': a.get_type_display(),
                 'attendee_type_key': a.type,
                 'name': name,
                 'col_2': col_2,
@@ -633,8 +623,10 @@ def search_guest_list(request):
             })
 
     elif attendee_type == 'faculty':
+        # Course administrators of the chosen courses or subjects (#12).
+        course = [c for c in course if c]
         fac_ids = CourseAdministrator.objects.filter(
-            course__cohort__id__in=cohort
+            Q(course__cohort__id__in=[c for c in cohort if c]) | Q(course__id__in=course)
         ).values_list('user__id', flat=True)
 
         records = FacultyCoordinator.objects.filter(
@@ -652,6 +644,35 @@ def search_guest_list(request):
                 'attendee_type': attendee_type
             })
     
+    elif attendee_type == 'highschool_admin':
+        # High school personnel with an active position at the chosen
+        # schools or districts (#12).
+        from cis.models.highschool_administrator import HSAdministrator
+        highschools = [h for h in request.GET.getlist('highschool') if h]
+        districts = [d for d in request.GET.getlist('district') if d]
+        if not (highschools or districts):
+            return JsonResponse({
+                'data': [],
+                'message': 'Choose at least one high school or district.'
+            })
+        position_q = Q(hsadministratorposition__status__iexact='active')
+        if highschools:
+            position_q &= Q(hsadministratorposition__highschool__id__in=highschools)
+        if districts:
+            position_q &= Q(hsadministratorposition__highschool__district__id__in=districts)
+        records = HSAdministrator.objects.filter(position_q).distinct().select_related(
+            'user').order_by('user__last_name', 'user__first_name')
+        for record in records:
+            result['data'].append({
+                'id': str(record.id),
+                'name': f'{record.user.last_name}, {record.user.first_name}',
+                'col_2': ', '.join(_personnel_schools(record)),
+                'col_3': ', '.join(_personnel_positions(record)),
+                'col_4': record.user.email,
+                'col_5': '',
+                'attendee_type': attendee_type
+            })
+
     elif attendee_type == 'highschool':
         # Schools with an Active link to the current campus (per request).
         records = picker_queryset()
@@ -709,6 +730,20 @@ def search_guest_list(request):
             })
 
     return JsonResponse(result)
+
+def _active_positions(hsadmin):
+    from cis.models.highschool_administrator import HSAdministratorPosition
+    return HSAdministratorPosition.objects.filter(
+        hsadmin=hsadmin, status__iexact='active').select_related('highschool', 'position')
+
+
+def _personnel_schools(hsadmin):
+    return sorted({p.highschool.name for p in _active_positions(hsadmin)})
+
+
+def _personnel_positions(hsadmin):
+    return sorted({p.position.name for p in _active_positions(hsadmin)})
+
 
 def _teaches_in_term(term_id):
     """Q for certificates whose teacher teaches that course in the term, as

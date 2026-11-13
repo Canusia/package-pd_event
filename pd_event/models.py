@@ -23,6 +23,14 @@ from cis.settings.pd_event import pd_event
 from cis.utils import export_to_excel, event_file_upload_path, getDomain
 from cis.storage_backend import PrivateMediaStorage
 
+def format_event_time(value):
+    """mm/dd/yyyy hh:mm AM/PM in local time. (The old '%I:%m' printed the
+    month where the minutes go.)"""
+    if not value:
+        return ''
+    return timezone.localtime(value).strftime('%m/%d/%Y %I:%M %p')
+
+
 class EventType(models.Model):
     """
     Speaker model
@@ -265,17 +273,18 @@ class Event(models.Model):
         )
 
         for attendee in attendees:
+            person = attendee.recipient()
+            if not person or not person['emails']:
+                continue
             message = pd_settings.get('event_reminder_template', '')
 
-            to = []
-            a = attendee.get_info()
             message = message.format(
-                attendee_first_name=attendee.course_certificate.teacher_highschool.teacher.user.first_name,
-                attendee_last_name=attendee.course_certificate.teacher_highschool.teacher.user.last_name,
-                course=attendee.course_certificate.course.name,
+                attendee_first_name=person['first_name'],
+                attendee_last_name=person['last_name'],
+                course=person['course'],
                 term=str(self.term),
-                start_date_time=self.start_time_local.strftime('%m/%d/%Y %I:%m %p'),
-                end_date_time=self.end_time_local.strftime('%m/%d/%Y %I:%m %p'),
+                start_date_time=format_event_time(self.start_time),
+                end_date_time=format_event_time(self.end_time),
                 event_type=self.event_type,
                 description=self.description
             )
@@ -285,12 +294,8 @@ class Event(models.Model):
                     'kadaji@gmail.com'
                 ]
             else:
-                to.append(attendee.course_certificate.teacher_highschool.teacher.user.email)
-                if attendee.course_certificate.teacher_highschool.teacher.user.alt_email:
-                    to.append(attendee.course_certificate.teacher_highschool.teacher.user.alt_email)
-                if attendee.course_certificate.teacher_highschool.teacher.user.secondary_email:
-                    to.append(attendee.course_certificate.teacher_highschool.teacher.user.secondary_email)
-                    
+                to = person['emails']
+
             template = get_template('cis/email.html')
             html_body = template.render({
                 'message': message
@@ -303,7 +308,8 @@ class Event(models.Model):
                 settings.DEFAULT_FROM_EMAIL,
                 to
             )
-            return True
+        # After the loop: it used to return after the first guest.
+        return True
 
 class EventFile(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -338,11 +344,14 @@ class EventAttendee(models.Model):
 
     ATTENDEE_TYPE = [
         ('instructor', 'Instructor'),
-        # ('highschool_admin', 'High School Personnel'),
-        # ('cohort_participant', 'Cohort Participant'),
+        ('highschool_admin', 'High School Personnel'),
+        ('cohort_participant', 'Cohort Participant'),
         ('highschool', 'High School'),
         ('faculty', 'Faculty'),
     ]
+    # Types CE can invite from the guest search (#12). 'highschool' rows
+    # record a participant count, not a person.
+    PERSON_TYPES = ('instructor', 'highschool_admin', 'cohort_participant', 'faculty')
     type = models.CharField(
         choices=ATTENDEE_TYPE,
         max_length=50,
@@ -359,48 +368,68 @@ class EventAttendee(models.Model):
             ('event', 'meta')
         ]
 
+    def recipient(self):
+        """{first_name, last_name, emails, course} for a person guest, or None
+        (a high school row, or a record that no longer exists). One place for
+        every guest type (#12): letters, reminders and emails use it."""
+        if self.type == 'highschool':
+            return None
+        user = None
+        course = ''
+        if self.type == 'instructor' and self.course_certificate_id:
+            try:
+                user = self.course_certificate.teacher_highschool.teacher.user
+                course = self.course_certificate.course.name
+            except AttributeError:
+                return None
+        else:
+            attendee = self.get_info().get('attendee')
+            user = getattr(attendee, 'user', None)
+        if user is None:
+            return None
+        emails = [e for e in (user.email, getattr(user, 'alt_email', None),
+                              getattr(user, 'secondary_email', None)) if e]
+        return {'first_name': user.first_name, 'last_name': user.last_name,
+                'emails': list(dict.fromkeys(emails)), 'course': course}
+
+    def letter_context(self, person=None):
+        """Template values for the PD letter and its email."""
+        person = person or self.recipient() or {}
+        return {
+            'attendee_first_name': person.get('first_name', ''),
+            'attendee_last_name': person.get('last_name', ''),
+            'course': person.get('course', ''),
+            'term': str(self.event.term),
+            'earned_pd_hour': self.meta.get('pd_hour'),
+            'start_date_time': format_event_time(self.event.start_time),
+            'end_date_time': format_event_time(self.event.end_time),
+            'event_type': self.event.event_type,
+            'pd_note': self.meta.get('note'),
+            'delivery_mode': self.event.delivery_mode,
+            'pd_letter_url': self.pd_url,
+            'description': self.event.description,
+        }
+
     def send_pd_letter(self):
+        person = self.recipient()
+        if not person or not person['emails']:
+            return False
+
         pd_settings = pd_event.from_db()
 
         subject = pd_settings.get('pd_email_subject', '')
-        message = pd_settings.get('pd_email_template', '')
-
-        message = Template(message)
-        context = Context({
-            'attendee_first_name' : self.course_certificate.teacher_highschool.teacher.user.first_name,
-            'attendee_last_name' : self.course_certificate.teacher_highschool.teacher.user.last_name,
-            'course' : self.course_certificate.course.name,
-            'term' : str(self.event.term),
-            'earned_pd_hour' : self.meta.get('pd_hour'),
-            'start_date_time' : self.event.start_time_local.strftime('%m/%d/%Y %I:%m %p'),
-            'end_date_time' : self.event.end_time_local.strftime('%m/%d/%Y %I:%m %p'),
-            "event_type" : self.event.event_type,
-            'pd_note' : self.meta.get('note'),
-            'delivery_mode' : self.event.delivery_mode,
-            'pd_letter_url' : self.pd_url,
-            'description' : self.event.description
-        })
-        text_body = message.render(context)
-
-        if self.type == 'highschool':
-            return False
+        message = Template(pd_settings.get('pd_email_template', ''))
+        text_body = message.render(Context(self.letter_context(person)))
 
         template = get_template('cis/email.html')
         html_body = template.render({
             'message': text_body
         })
 
-        to = [
-            self.course_certificate.teacher_highschool.teacher.user.email
-        ]
-        if self.course_certificate.teacher_highschool.teacher.user.alt_email:
-            to.append(self.course_certificate.teacher_highschool.teacher.user.alt_email)
-        if self.course_certificate.teacher_highschool.teacher.user.secondary_email:
-            to.append(self.course_certificate.teacher_highschool.teacher.user.secondary_email)
-
+        to = person['emails']
         if getattr(settings, 'DEBUG') == True:
             to = ['kadaji@gmail.com']
-        
+
         send_html_mail(
             subject,
             text_body,
@@ -432,6 +461,18 @@ class EventAttendee(models.Model):
                     'last_name': attendee.user.last_name,
                     'email': attendee.user.email,
                     'alt_email': attendee.user.alt_email,
+                    'attendee': attendee
+                }
+            elif self.type == 'highschool_admin':
+                from cis.models.highschool_administrator import HSAdministrator
+                attendee = HSAdministrator.objects.select_related('user').get(
+                    pk=self.meta['id']
+                )
+                return {
+                    'first_name': attendee.user.first_name,
+                    'last_name': attendee.user.last_name,
+                    'email': attendee.user.email,
+                    'alt_email': getattr(attendee.user, 'secondary_email', None),
                     'attendee': attendee
                 }
             elif self.type == 'faculty':
