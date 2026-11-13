@@ -144,6 +144,26 @@ class EventSummaryTests(_Fixture):
         s = event_summary(empty)
         self.assertEqual((s['invited'], s['rate'], s['pd_hours']), (0, None, 0))
 
+    def test_garbage_and_mixed_case_values(self):
+        from .services.summary import event_summary
+        self.cat.meta['pd_hour'] = 'nan'
+        self.cat.save()
+        self.ann.meta['pd_hour'] = 'inf'
+        self.ann.save()
+        self.eve.meta['attendance_status'] = ' Attended '
+        self.eve.meta['pd_hour'] = None
+        self.eve.save()
+        s = event_summary(self.event)
+        self.assertEqual(s['pd_hours'], 0)
+        self.assertEqual(s['attended'], 3)
+
+    def test_faculty_rows_are_not_owed_letters(self):
+        from .services.summary import event_summary
+        EventAttendee.objects.create(event=self.event, type='faculty', meta={
+            'id': '1', 'attendance_type': 'optional', 'attendance_status': ATTENDED})
+        s = event_summary(self.event)
+        self.assertEqual((s['attended'], s['letters_owed']), (3, 1))
+
     def test_summary_view_renders_the_cards(self):
         from .views.event import event_summary_view
         html = self._get(event_summary_view, self.event.id).content.decode()
@@ -217,6 +237,39 @@ class BulkActionTests(_Fixture):
         self.assertTrue(self.cat.meta.get('pd_letter_sent_on'))
 
 
+    def test_send_letters_owed_skips_rows_without_a_certificate(self):
+        from .views.event import email_pd_letter
+        EventAttendee.objects.create(event=self.event, type='faculty', meta={
+            'id': '1', 'attendance_type': 'optional', 'attendance_status': ATTENDED})
+        with mock.patch.object(EventAttendee, 'send_pd_letter', autospec=True,
+                               return_value=True) as send:
+            self._post(email_pd_letter, self.event.id, scope='owed')
+        self.assertEqual([call.args[0].pk for call in send.call_args_list], [self.cat.pk])
+
+    def test_mixed_case_attended_still_gets_its_letter(self):
+        from .views.event import email_pd_letter
+        self.cat.meta['attendance_status'] = 'Attended'
+        self.cat.save()
+        with mock.patch.object(EventAttendee, 'send_pd_letter', autospec=True,
+                               return_value=True) as send:
+            self._post(email_pd_letter, self.event.id, scope='owed')
+        self.assertEqual([call.args[0].pk for call in send.call_args_list], [self.cat.pk])
+
+    def test_marking_attended_again_restores_pd_hours(self):
+        from .views.event import mark_attendance
+        self._post(mark_attendance, self.event.id, attendee=str(self.bob.id),
+                   attendance_status='attended')
+        self.bob.refresh_from_db()
+        self.assertEqual(float(self.bob.meta['pd_hour']), 3.0)
+        # Hours CE typed for someone already attended are kept.
+        self.cat.meta['pd_hour'] = '1.5'
+        self.cat.save()
+        self._post(mark_attendance, self.event.id, attendee=str(self.cat.id),
+                   attendance_status='attended')
+        self.cat.refresh_from_db()
+        self.assertEqual(self.cat.meta['pd_hour'], '1.5')
+
+
 class EventListTests(_Fixture):
     def _row(self, **params):
         from .views.event import EventViewSet
@@ -264,6 +317,30 @@ class EventListTests(_Fixture):
         self.assertIn('end_time', row)
         self.assertEqual(row['num_invited'], 6)
 
+    def test_datatables_search_and_order_with_count_columns(self):
+        from .views.event import EventViewSet
+        cols = [('name', 'name', 'true', 'true'), ('start_time', 'start_time', 'true', 'true'),
+                ('pd_hour', 'pd_hour', 'false', 'true'),
+                ('num_invited', 'id', 'false', 'false'),
+                ('attendance_status_label', 'id', 'false', 'false')]
+        params = {'format': 'datatables', 'draw': '1', 'start': '0', 'length': '30',
+                  'search[value]': 'Fall', 'order[0][column]': '2', 'order[0][dir]': 'asc'}
+        for i, (data, name, searchable, orderable) in enumerate(cols):
+            params.update({f'columns[{i}][data]': data, f'columns[{i}][name]': name,
+                           f'columns[{i}][searchable]': searchable,
+                           f'columns[{i}][orderable]': orderable,
+                           f'columns[{i}][search][value]': ''})
+        request = APIRequestFactory().get('/ce/events/api/events/', params)
+        force_authenticate(request, user=self.ce_user)
+        response = EventViewSet.as_view({'get': 'list'})(request).render()
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(str(self.event.id), [r['id'] for r in response.data['data']])
+
+    def test_mixed_case_status_counts_in_the_list(self):
+        self.eve.meta['attendance_status'] = 'Attended'
+        self.eve.save()
+        self.assertEqual(self._row()['num_attended'], 3)
+
     def test_list_page_has_by_term_tab_for_ce(self):
         from .views.event import index
         html = self._get(index).content.decode()
@@ -301,6 +378,28 @@ class ByTermTests(_Fixture):
         rows = list(csv.reader(io.StringIO(resp.content.decode())))
         self.assertEqual(rows[0][:3], ['Last Name', 'First Name', 'Email'])
         self.assertEqual([r[1] for r in rows[1:]], ['Bob'])
+
+    def test_csv_neutralises_formulas(self):
+        from .views.event import required_missed_csv
+        user = self.bob.course_certificate.teacher_highschool.teacher.user
+        user.last_name = '=HYPERLINK("http://x")'
+        user.save()
+        rows = list(csv.reader(io.StringIO(
+            self._get(required_missed_csv, self.term.id).content.decode())))
+        self.assertEqual(rows[1][0], "'=HYPERLINK(\"http://x\")")
+
+    def test_by_term_query_count_does_not_grow_with_guests(self):
+        from django.db import connection
+        from django.test.utils import CaptureQueriesContext
+        from .views.event import events_by_term
+        with CaptureQueriesContext(connection) as before:
+            self._get(events_by_term)
+        for i in range(5):
+            EventAttendee.objects.create(event=self.event, type='highschool', meta={
+                'id': str(i), 'attendance_type': 'optional', 'attendance_status': ATTENDED})
+        with CaptureQueriesContext(connection) as after:
+            self._get(events_by_term)
+        self.assertEqual(len(after), len(before))
 
     def test_ce_only(self):
         from django.core.exceptions import PermissionDenied

@@ -11,7 +11,9 @@ Attendance lives in ``EventAttendee.meta``:
 Counts are per guest-list row. An instructor on the list for two of the
 event's courses has two rows (see the duplicate-invites issue).
 """
+import math
 from collections import OrderedDict
+from types import SimpleNamespace
 
 ATTENDED = 'attended'
 NOT_ATTENDED = 'not attended'
@@ -56,14 +58,19 @@ def pd_hours(attendee):
     if status_key(attendee) != KEY_ATTENDED:
         return 0.0
     try:
-        return float((attendee.meta or {}).get('pd_hour') or 0)
+        hours = float((attendee.meta or {}).get('pd_hour') or 0)
     except (TypeError, ValueError):
         return 0.0
+    # The inline edit saves raw text: 'nan' and 'inf' parse as floats.
+    return hours if math.isfinite(hours) else 0.0
 
 
 def gets_letter(attendee):
-    """A PD letter is owed to an instructor/faculty attendee who attended."""
-    return attendee.type != 'highschool' and status_key(attendee) == KEY_ATTENDED
+    """A PD letter is owed to an instructor who attended. Only instructor
+    rows carry the course certificate that EventAttendee.send_pd_letter()
+    reads, so faculty and high school rows get none."""
+    return (attendee.type == 'instructor' and bool(attendee.course_certificate_id)
+            and status_key(attendee) == KEY_ATTENDED)
 
 
 def letter_sent_on(attendee):
@@ -205,32 +212,56 @@ def term_attendees(term_ids=None):
 
 
 def by_term():
-    """One row per term that has events: events, guests and outcomes."""
-    from ..models import Event
-    events = {}
-    for event in Event.objects.select_related('term').order_by('-term__code'):
-        events.setdefault(event.term_id, {'term': event.term, 'events': 0})['events'] += 1
-    attendees = {}
-    for a in term_attendees(list(events)):
-        attendees.setdefault(a.event.term_id, []).append(a)
+    """One row per term that has events: events, guests and outcomes.
 
-    rows = []
+    Reads only each guest row's meta and teacher id (no model instances), so
+    the tab stays light on tenants with years of events.
+    """
+    from ..models import Event, EventAttendee
+    events = OrderedDict()
+    for term_id, label, code in (Event.objects.order_by('-term__code')
+                                 .values_list('term_id', 'term__label', 'term__code')):
+        events.setdefault(term_id, {'label': label, 'code': code, 'events': 0})['events'] += 1
+
+    totals = {}
+    rows = (EventAttendee.objects.filter(event__term_id__in=list(events))
+            .values_list('event__term_id', 'meta',
+                         'course_certificate__teacher_highschool__teacher_id'))
+    for term_id, meta, teacher in rows.iterator():
+        guest = SimpleNamespace(meta=meta or {})
+        t = totals.setdefault(term_id, {'invited': 0, 'attended': 0, 'not_marked': 0,
+                                        'required_missed': 0, 'pd_hours': 0.0,
+                                        'teachers': set()})
+        key = status_key(guest)
+        t['invited'] += 1
+        if key == KEY_ATTENDED:
+            t['attended'] += 1
+            if teacher:
+                t['teachers'].add(teacher)
+        elif key == KEY_NOT_MARKED:
+            t['not_marked'] += 1
+        if is_required_missed(guest):
+            t['required_missed'] += 1
+        t['pd_hours'] += pd_hours(guest)
+
+    out = []
     for term_id, info in events.items():
-        s = summarize(attendees.get(term_id, []))
-        rows.append({
+        t = totals.get(term_id, {'invited': 0, 'attended': 0, 'not_marked': 0,
+                                 'required_missed': 0, 'pd_hours': 0.0, 'teachers': set()})
+        out.append({
             'term_id': str(term_id),
-            'term': str(info['term'].label),
-            'term_code': info['term'].code,
+            'term': str(info['label']),
+            'term_code': info['code'],
             'events': info['events'],
-            'invited': s['invited'],
-            'attended': s['attended'],
-            'not_marked': s['not_marked'],
-            'rate': s['rate'],
-            'required_missed': s['required_missed'],
-            'pd_hours': s['pd_hours'],
-            'instructors': s['instructors'],
+            'invited': t['invited'],
+            'attended': t['attended'],
+            'not_marked': t['not_marked'],
+            'rate': rate(t['attended'], t['invited']),
+            'required_missed': t['required_missed'],
+            'pd_hours': _round_hours(t['pd_hours']),
+            'instructors': len(t['teachers']),
         })
-    return rows
+    return out
 
 
 def term_detail(term):

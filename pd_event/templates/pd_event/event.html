@@ -563,7 +563,6 @@
                                                                                 }
                                                                             });
                                                                         });
-                                                                        $(document).on('change', '.update_count[data-key=pd_hour]', refresh_summary);
                                                                     });
 
                                                                     var tbl_event_guests = $('#tbl_event_guests').DataTable({
@@ -645,7 +644,6 @@
                                                                                 $("input[name='select-all']").prop("checked", false);
                                                                                 get_event_guests()
                                                                                 get_event_attendees()
-                                                                                refresh_summary()
                                                                                 refresh_summary()
                                                                             }
                                                                         })
@@ -971,7 +969,8 @@
                                                                             data: records,
                                                                             dataType: 'json',
                                                                             success: function (response) {
-
+                                                                                // After the save, so the card shows the new hours.
+                                                                                if (key === 'pd_hour') { clearTimeout(window.pd_hours_timer); window.pd_hours_timer = setTimeout(refresh_summary, 800); }
                                                                             }
                                                                         })
                                                                         return false;

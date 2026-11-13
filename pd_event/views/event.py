@@ -87,9 +87,9 @@ class EventViewSet(viewsets.ReadOnlyModelViewSet):
         return records.select_related('event_type', 'term').annotate(
             att_invited=Count(attendee_id, distinct=True),
             att_attended=Count(attendee_id, distinct=True, filter=Q(
-                eventattendee__meta__attendance_status='attended')),
+                eventattendee__meta__attendance_status__iexact='attended')),
             att_not_attended=Count(attendee_id, distinct=True, filter=Q(
-                eventattendee__meta__attendance_status='not attended')),
+                eventattendee__meta__attendance_status__iexact='not attended')),
         )
 
 def remove_upload(request, record_id):
@@ -129,9 +129,10 @@ def email_pd_letter(request, record_id):
     event = Event.objects.get(id=record_id)
     attendee_ids = request.POST.getlist('attendee', None)
 
+    from ..services.summary import gets_letter, letter_sent_on
+
     if request.POST.get('scope') == 'owed':
         # Everyone who attended and has not been sent a letter (#9).
-        from ..services.summary import gets_letter, letter_sent_on
         attendees = [a for a in EventAttendee.objects.filter(event=event)
                      if gets_letter(a) and not letter_sent_on(a)]
         if not attendees:
@@ -153,7 +154,7 @@ def email_pd_letter(request, record_id):
 
     sent_count = 0
     for a in attendees:
-        if (a.meta or {}).get('attendance_status') == 'attended':
+        if gets_letter(a):
             if a.send_pd_letter():
                 a.meta['pd_letter_sent_on'] = datetime.datetime.now().strftime('%m/%d/%Y')
                 a.save()
@@ -357,6 +358,16 @@ def mark_attendance(request, record_id):
         if attendance_status == 'not attended':
             a.meta['pd_hour'] = 0
             a.meta['participants'] = 0
+        elif attendance_status == 'attended' and a.type != 'highschool':
+            # Not attended zeroed the hours; marking attended again (one
+            # click since #9) gives back the event's hours. Hours CE typed
+            # for this attendee are kept.
+            try:
+                hours = float(a.meta.get('pd_hour') or 0)
+            except (TypeError, ValueError):
+                hours = 0
+            if not hours:
+                a.meta['pd_hour'] = event.pd_hour
         a.save()
 
     return JsonResponse({
@@ -520,14 +531,15 @@ def attendees(request, record_id):
         col_2 = ''
         col_3 = ''
         if a.type == 'instructor':
-            try:                
+            try:
                 name = f'{a.course_certificate.teacher_highschool.teacher.user.last_name}, {a.course_certificate.teacher_highschool.teacher.user.first_name}'
 
                 col_2 = f'{a.course_certificate.course.name}'
                 col_3 = f'{a.course_certificate.teacher_highschool.highschool.name}'
-            except Exception as e:
-                print(e)
-                continue
+            except Exception:
+                # Listed rather than skipped, so the table agrees with the
+                # summary counts and can still be marked or removed (#9).
+                name = '(instructor record missing)'
         elif a.type == 'faculty':
             attendee = FacultyCoordinator.objects.get(
                 pk=a.meta['id']
@@ -820,13 +832,18 @@ def required_missed_csv(request, term_id):
     writer = csv.writer(response)
     writer.writerow(['Last Name', 'First Name', 'Email', 'High School', 'Course',
                      'Event', 'Event Type', 'Event Date'])
+    def cell(value):
+        # Spreadsheet apps run a cell that starts with = + - @ as a formula.
+        value = '' if value is None else str(value)
+        return "'" + value if value[:1] in ('=', '+', '-', '@') else value
+
     for a in required_missed(term):
         school, course = school_and_course(a)
         event = a.event
-        writer.writerow([
+        writer.writerow([cell(v) for v in [
             *person(a), school, course, event.name or '', event.event_type.name,
             event.start_time_local.strftime('%m/%d/%Y') if event.start_time else '',
-        ])
+        ]])
     return response
 
 def add_new(request):

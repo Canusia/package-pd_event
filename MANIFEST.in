@@ -10,4 +10,5 @@ recursive-include pd_event/management *
 recursive-include pd_event/migrations *
 recursive-include pd_event/reports *
 recursive-include pd_event/settings *
-recursive-include pd_event/staticfiles *recursive-include pd_event/services *
+recursive-include pd_event/staticfiles *
+recursive-include pd_event/services *
