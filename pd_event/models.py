@@ -418,10 +418,15 @@ class EventAttendee(models.Model):
     def get_info(self):
         try:
             if self.type == 'instructor':
-                from cis.models.teacher import Teacher
-                attendee = Teacher.objects.get(
-                    pk=self.meta['id']
-                )
+                # meta['id'] is the course certificate's id (add_attendee),
+                # not a Teacher pk (#18): read the teacher off the certificate.
+                if self.course_certificate_id:
+                    attendee = self.course_certificate.teacher_highschool.teacher
+                else:
+                    from cis.models.teacher import Teacher
+                    attendee = Teacher.objects.get(
+                        pk=self.meta['id']
+                    )
                 return {
                     'first_name': attendee.user.first_name,
                     'last_name': attendee.user.last_name,
@@ -464,7 +469,7 @@ class EventAttendee(models.Model):
                     'first_name': attendee.name,
                     'attendee': attendee
                 }
-        except:
+        except Exception:
             return {
                 'first_name': '-',
                 'last_name': '-',

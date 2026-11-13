@@ -92,8 +92,7 @@ def school_and_course(attendee):
 
 def person(attendee):
     """(last name, first name, email). Instructor rows read the course
-    certificate: their meta 'id' is the certificate id, which
-    EventAttendee.get_info() looks up as a Teacher id and misses."""
+    certificate directly (one less query than get_info())."""
     cert = attendee.course_certificate if attendee.course_certificate_id else None
     if cert is not None:
         try:

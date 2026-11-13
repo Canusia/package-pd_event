@@ -410,3 +410,23 @@ class ByTermTests(_Fixture):
             self._get(events_by_term, user=outsider)
         with self.assertRaises(PermissionDenied):
             self._get(required_missed_csv, self.term.id, user=outsider)
+
+
+class GetInfoTests(_Fixture):
+    """#18: instructor rows store the certificate id in meta['id']."""
+
+    def test_instructor_info_comes_from_the_certificate(self):
+        info = self.ann.get_info()
+        self.assertEqual((info['first_name'], info['last_name']), ('Ann', 'Teacher'))
+        self.assertEqual(info['attendee'], self.ann.course_certificate.teacher_highschool.teacher)
+
+    def test_sign_in_sheet_lists_names(self):
+        html = self.event.guest_list_html
+        for first in ('Ann', 'Bob', 'Cat'):
+            self.assertIn(f'Teacher, {first}', html)
+        self.assertNotIn('>-<', html.replace(' ', ''))
+
+    def test_missing_record_still_falls_back(self):
+        orphan = EventAttendee.objects.create(event=self.event, type='faculty', meta={
+            'id': str(uuid.uuid4()), 'attendance_type': 'optional', 'attendance_status': 'N/A'})
+        self.assertEqual(orphan.get_info()['first_name'], '-')
