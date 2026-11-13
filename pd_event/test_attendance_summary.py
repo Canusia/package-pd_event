@@ -492,3 +492,64 @@ class PriorYearTests(_Fixture):
     def test_prior_term_without_events_is_none(self):
         # Fall 2024 exists but has no events: nothing to compare.
         self.assertIsNone(self._rows()[str(self.last_term.id)]['prior'])
+
+
+class GuestSearchTests(_Fixture):
+    """#11: search guests by term taught, school or district, without courses."""
+
+    def _search(self, **params):
+        from .views.event import search_guest_list
+        params.setdefault('instructor_course_status', ['Teaching'])
+        request = RequestFactory().get('/x', {'attendee_type': 'instructor', **params})
+        request.user = self.ce_user
+        data = json.loads(search_guest_list(request).content)
+        return data, {r['name'].split(',')[1].strip() + ' ' + r['col_3'] for r in data['data']}
+
+    def test_teaching_in_a_term_matches_the_course_taught(self):
+        from cis.models.section import ClassSection
+        dan_teacher = self.dan.course_certificate.teacher_highschool.teacher
+        ClassSection.objects.create(class_number=_u('CN'), section_number='01', term=self.term,
+                                    course=self.mth, highschool=self.south, status='A',
+                                    teacher=dan_teacher)
+        # Dan also holds an ENG certificate he does not teach this term.
+        TeacherCourseCertificate.objects.create(
+            teacher_highschool=self.dan.course_certificate.teacher_highschool, course=self.eng)
+        _, found = self._search(teaching_term=str(self.term.id))
+        self.assertEqual(found, {'Dan MTH 102'})
+
+    def test_by_high_school(self):
+        _, found = self._search(highschool=[str(self.north.id)])
+        self.assertEqual(found, {'Ann ENG 101', 'Bob ENG 101', 'Fay MTH 102'})
+
+    def test_by_district(self):
+        from cis.models.district import District
+        district = District.objects.create(name=_u('District'))
+        self.south.district = district
+        self.south.save()
+        _, found = self._search(district=[str(district.id)])
+        self.assertEqual(found, {'Cat ENG 101', 'Dan MTH 102', 'Eve MTH 102'})
+
+    def test_filters_combine(self):
+        _, found = self._search(highschool=[str(self.north.id)], course=[str(self.mth.id)])
+        self.assertEqual(found, {'Fay MTH 102'})
+
+    def test_status_matches_any_case(self):
+        TeacherCourseCertificate.objects.filter(pk=self.fay.course_certificate.pk).update(status='TEACHING')
+        _, found = self._search(highschool=[str(self.north.id)], course=[str(self.mth.id)],
+                                instructor_course_status=['teaching'])
+        self.assertEqual(found, {'Fay MTH 102'})
+
+    def test_no_filter_is_refused(self):
+        data, found = self._search()
+        self.assertEqual(found, set())
+        self.assertIn('Choose', data['message'])
+
+    def test_form_works_for_an_event_without_courses(self):
+        from .forms import EventAttendeeFilterForm
+        form = EventAttendeeFilterForm(event=self.event)
+        self.assertFalse(form.fields['course'].required)
+        self.assertEqual(form.fields['teaching_term'].initial, self.term.id)
+        for name in ('highschool', 'district'):
+            self.assertIn(name, form.fields)
+        self.assertIn('Teaching', form.fields['instructor_course_status'].initial)
+        self.assertNotIn('Inactive', form.fields['instructor_course_status'].initial)

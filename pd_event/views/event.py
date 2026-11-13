@@ -664,10 +664,33 @@ def search_guest_list(request):
             })
 
     elif attendee_type == 'instructor':
-        records = TeacherCourseCertificate.objects.filter(
-            course__id__in=course,
-            status__in=course_status
-        )
+        # Any mix of course, term taught, high school and district (#11), so
+        # an event with no courses can still find its guests.
+        teaching_term = request.GET.get('teaching_term')
+        highschools = [h for h in request.GET.getlist('highschool') if h]
+        districts = [d for d in request.GET.getlist('district') if d]
+        course = [c for c in course if c]
+        if not (course or teaching_term or highschools or districts):
+            return JsonResponse({
+                'data': [],
+                'message': 'Choose at least one course, term, high school or district.'
+            })
+
+        from django.db.models.functions import Lower
+        records = TeacherCourseCertificate.objects.annotate(
+            status_lower=Lower('status')
+        ).filter(
+            status_lower__in=[s.lower() for s in course_status]
+        ).select_related('teacher_highschool__teacher__user',
+                         'teacher_highschool__highschool', 'course')
+        if course:
+            records = records.filter(course__id__in=course)
+        if highschools:
+            records = records.filter(teacher_highschool__highschool__id__in=highschools)
+        if districts:
+            records = records.filter(teacher_highschool__highschool__district__id__in=districts)
+        if teaching_term:
+            records = records.filter(_teaches_in_term(teaching_term))
         if since:
             since = datetime.datetime.strptime(since, '%m/%d/%Y')
             records = records.filter(
@@ -686,6 +709,25 @@ def search_guest_list(request):
             })
 
     return JsonResponse(result)
+
+def _teaches_in_term(term_id):
+    """Q for certificates whose teacher teaches that course in the term, as
+    the primary or (cis with #154) a secondary teacher of a section."""
+    from django.db.models import Exists, OuterRef
+    from cis.models.section import ClassSection
+
+    sections = ClassSection.objects.filter(
+        term_id=term_id, course_id=OuterRef('course_id'))
+    q = Q(Exists(sections.filter(teacher_id=OuterRef('teacher_highschool__teacher_id'))))
+    try:
+        from cis.models.section_secondary import ClassSectionSecondaryTeacher
+    except ImportError:  # cis before #154
+        return q
+    secondary = ClassSectionSecondaryTeacher.objects.filter(
+        class_section__term_id=term_id, class_section__course_id=OuterRef('course_id'),
+        teacher_id=OuterRef('teacher_highschool__teacher_id'))
+    return q | Q(Exists(secondary))
+
 
 @xframe_options_exempt
 def detail(request, record_id):

@@ -216,11 +216,33 @@ class EventEmailForm(forms.Form):
     
 
 class EventAttendeeFilterForm(forms.Form):
-    
+    """Guest search. Any mix of course, term taught, high school and
+    district; at least one is needed (#11)."""
+
     course = forms.ModelMultipleChoiceField(
         queryset=None,
-        required=True,
+        required=False,
         label='Course(s)'
+    )
+
+    teaching_term = forms.ModelChoiceField(
+        queryset=None,
+        required=False,
+        label='Teaching in term',
+        empty_label='Any term',
+        help_text='Instructors with a class of that course in the term.'
+    )
+
+    highschool = forms.ModelMultipleChoiceField(
+        queryset=None,
+        required=False,
+        label='High School(s)'
+    )
+
+    district = forms.ModelMultipleChoiceField(
+        queryset=None,
+        required=False,
+        label='District(s)'
     )
 
     instructor_course_status = forms.MultipleChoiceField(
@@ -244,8 +266,22 @@ class EventAttendeeFilterForm(forms.Form):
     def __init__(self, event, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.fields['course'].queryset = event.courses.all().order_by('name')
+        from cis.models.district import District
+        from cis.models.term import Term
+        from cis.highschool_scope import picker_queryset
+
+        # The event's courses come first; any course can be searched.
+        self.fields['course'].queryset = Course.objects.filter(
+            status__iexact='active').order_by('name') | event.courses.all()
+        self.fields['course'].queryset = self.fields['course'].queryset.distinct().order_by('name')
         self.fields['course'].initial = event.courses.all()
+        self.fields['teaching_term'].queryset = Term.objects.order_by('-code', 'label')
+        self.fields['teaching_term'].initial = None if event.courses.exists() else event.term_id
+        self.fields['highschool'].queryset = picker_queryset()
+        self.fields['district'].queryset = District.objects.order_by('name')
+        self.fields['instructor_course_status'].initial = [
+            value for value, _ in TeacherCourseCertificate.STATUS_OPTIONS
+            if value.lower().startswith('teaching')]
 
 class EventFileForm(ModelForm):
     class Meta:

@@ -803,7 +803,7 @@
                                                                                     if (!table.data().any()) {
                                                                                         swal(
                                                                                             "",
-                                                                                            "Your search did not produce any results. Please try a different search criteria.",
+                                                                                            (json && json.message) || "Your search did not produce any results. Please try a different search criteria.",
                                                                                             "warning")
                                                                                         $(".btn_apply_for_selected").hide();
                                                                                     } else {
