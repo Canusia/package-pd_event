@@ -226,6 +226,7 @@ def by_term():
     for term_id, label, code in (Event.objects.order_by('-term__code')
                                  .values_list('term_id', 'term__label', 'term__code')):
         events.setdefault(term_id, {'label': label, 'code': code, 'events': 0})['events'] += 1
+    prior_of = _prior_terms(events)
 
     totals = {}
     rows = (EventAttendee.objects.filter(event__term_id__in=list(events))
@@ -265,7 +266,49 @@ def by_term():
             'pd_hours': _round_hours(t['pd_hours']),
             'instructors': len(t['teachers']),
         })
+
+    # The same term a year earlier (#17), when it had events.
+    by_id = {row['term_id']: row for row in out}
+    for row in out:
+        prior = by_id.get(str(prior_of.get(row['term_id']) or ''))
+        row['prior'] = {key: prior[key] for key in (
+            'term_id', 'term', 'events', 'invited', 'attended', 'rate', 'not_marked',
+            'required_missed', 'pd_hours', 'instructors')} if prior else None
     return out
+
+
+def _prior_terms(term_ids):
+    """{term id (str): id of the same term a year earlier}.
+
+    "The same term" is the same code (codes repeat each academic year); "a
+    year earlier" is the latest earlier academic year of the same campus,
+    by start date and then by name.
+    """
+    import datetime
+
+    from cis.models.term import Term
+
+    terms = list(Term.objects.filter(
+        code__in=Term.objects.filter(id__in=list(term_ids)).values('code'))
+        .values('id', 'code', 'academic_year__name', 'academic_year__hs_start_date',
+                'academic_year__campus_id'))
+
+    def year_key(t):
+        return (t['academic_year__hs_start_date'] or datetime.date.min,
+                t['academic_year__name'] or '')
+
+    prior = {}
+    wanted = {str(i) for i in term_ids}
+    for t in terms:
+        if str(t['id']) not in wanted:
+            continue
+        earlier = [o for o in terms
+                   if o['code'] == t['code']
+                   and o['academic_year__campus_id'] == t['academic_year__campus_id']
+                   and year_key(o) < year_key(t)]
+        if earlier:
+            prior[str(t['id'])] = max(earlier, key=year_key)['id']
+    return prior
 
 
 def term_detail(term):

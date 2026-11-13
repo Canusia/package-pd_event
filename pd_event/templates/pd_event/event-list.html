@@ -146,6 +146,10 @@
                         <div class="bg-white border border-top-0">
                             <div class="col-12 pt-3 mb-3">
                                 <p class="small text-muted">One row per term. Rate is attended of invited. <em>Required missed</em> counts guests marked Not Attended for a required event; download the list to follow up. Open a term for its breakdown by event type, course and high school.</p>
+                                <div class="custom-control custom-checkbox mb-2">
+                                    <input type="checkbox" class="custom-control-input" id="pd_compare_prior">
+                                    <label class="custom-control-label" for="pd_compare_prior">Compare with the same term a year earlier</label>
+                                </div>
                                 <table id="records_by_term" class="table table-striped" style="width:100%">
                                     <thead>
                                         <tr>
@@ -198,8 +202,28 @@
                     }
 
                     {% if show_by_term %}
+                    // "vs <a year earlier> (+change)" under a By Term number (#17).
+                    var pd_compare = false;
+                    function pd_vs(value, type, row, key, unit) {
+                        let shown = value === null || value === undefined ? '–' : value + (unit || '');
+                        if (type !== 'display' || !pd_compare) return type === 'display' ? shown : value;
+                        if (!row.prior) return shown + '<div class="small text-muted">no events a year earlier</div>';
+                        let before = row.prior[key];
+                        if (before === null || before === undefined || value === null || value === undefined)
+                            return shown + '<div class="small text-muted">vs –</div>';
+                        let diff = Math.round((value - before) * 100) / 100;
+                        let cls = diff > 0 ? 'text-success' : (diff < 0 ? 'text-danger' : 'text-muted');
+                        if (key === 'required_missed') cls = diff > 0 ? 'text-danger' : (diff < 0 ? 'text-success' : 'text-muted');
+                        return shown + '<div class="small text-muted" title="' + pd_esc(row.prior.term) + '">vs ' + before + (unit || '') +
+                            ' <span class="' + cls + '">(' + (diff > 0 ? '+' : '') + diff + (unit || '') + ')</span></div>';
+                    }
+
                     $(document).ready(function () {
                         let by_term = null;
+                        $('#pd_compare_prior').on('change', function () {
+                            pd_compare = this.checked;
+                            if (by_term) by_term.rows().invalidate('data').draw(false);
+                        });
                         $('#tab_by_term').on('shown.bs.tab', function () {
                             if (by_term) { by_term.ajax.reload(null, false); return; }
                             by_term = $('#records_by_term').DataTable({
@@ -218,19 +242,23 @@
                                         render: function () { return '<a href="#" title="Show breakdown"><i class="fa fa-plus-circle"></i></a>'; }
                                     },
                                     {data: 'term', render: function (d) { return pd_esc(d); }},
-                                    {data: 'events', className: 'text-right'},
-                                    {data: 'invited', className: 'text-right'},
-                                    {data: 'attended', className: 'text-right', render: function (d, type) { return type === 'display' ? '<span class="text-success">' + d + '</span>' : d; }},
-                                    {data: 'rate', render: function (d, type) { return pd_rate_bar(d, type); }},
+                                    {data: 'events', className: 'text-right', render: function (d, type, row) { return pd_vs(d, type, row, 'events'); }},
+                                    {data: 'invited', className: 'text-right', render: function (d, type, row) { return pd_vs(d, type, row, 'invited'); }},
+                                    {data: 'attended', className: 'text-right', render: function (d, type, row) { return pd_vs(d, type, row, 'attended'); }},
+                                    {data: 'rate', render: function (d, type, row) {
+                                        if (type !== 'display' || !pd_compare) return pd_rate_bar(d, type);
+                                        return pd_rate_bar(d, type) + pd_vs(d, type, row, 'rate', '%').replace(/^[^<]*/, '');
+                                    }},
                                     {data: 'not_marked', className: 'text-right'},
                                     {
                                         data: 'required_missed', className: 'text-right',
-                                        render: function (d, type) {
-                                            return type === 'display' && d ? '<span class="text-danger font-weight-bold">' + d + '</span>' : d;
+                                        render: function (d, type, row) {
+                                            let html = pd_vs(d, type, row, 'required_missed');
+                                            return type === 'display' && d ? '<span class="text-danger font-weight-bold">' + d + '</span>' + html.replace(/^[^<]*/, '') : html;
                                         }
                                     },
-                                    {data: 'pd_hours', className: 'text-right'},
-                                    {data: 'instructors', className: 'text-right'},
+                                    {data: 'pd_hours', className: 'text-right', render: function (d, type, row) { return pd_vs(d, type, row, 'pd_hours'); }},
+                                    {data: 'instructors', className: 'text-right', render: function (d, type, row) { return pd_vs(d, type, row, 'instructors'); }},
                                     {
                                         data: null, orderable: false, searchable: false,
                                         render: function (d, type, row) {

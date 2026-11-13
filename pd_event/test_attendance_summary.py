@@ -457,3 +457,38 @@ class DetailsOverviewTests(_Fixture):
         html = self._page('post', action='edit_event', name='')
         self.assertNotRegex(html, r'id="event_edit_form"[^>]*class="[^"]*d-none')
         self.assertRegex(html, r'id="event_overview"[^>]*class="[^"]*d-none')
+
+
+class PriorYearTests(_Fixture):
+    """#17: By Term rows carry the same term a year earlier."""
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        from cis.models.term import AcademicYear
+        cls.term.academic_year.name = '2026-2027'
+        cls.term.academic_year.save()
+        cls.last_ay = AcademicYear.objects.create(name='2025-2026')
+        older_ay = AcademicYear.objects.create(name='2024-2025')
+        cls.last_term = Term.objects.create(academic_year=cls.last_ay, code=cls.term.code,
+                                            label='Fall 2025')
+        Term.objects.create(academic_year=older_ay, code=cls.term.code, label='Fall 2024')
+        last = Event.objects.create(name='Last Fall', event_type=cls.event_type,
+                                    term=cls.last_term, created_by=cls.ce_user, pd_hour=2)
+        for i, status in enumerate((ATTENDED, NOT_ATTENDED, NOT_ATTENDED, NOT_ATTENDED)):
+            EventAttendee.objects.create(event=last, type='highschool', meta={
+                'id': str(i), 'attendance_type': 'required', 'attendance_status': status})
+
+    def _rows(self):
+        from .views.event import events_by_term
+        return {r['term_id']: r for r in json.loads(self._get(events_by_term).content)['data']}
+
+    def test_row_has_the_previous_academic_years_term(self):
+        prior = self._rows()[str(self.term.id)]['prior']
+        self.assertEqual(prior['term'], 'Fall 2025')
+        self.assertEqual((prior['events'], prior['invited'], prior['attended'], prior['rate'],
+                          prior['required_missed']), (1, 4, 1, 25, 3))
+
+    def test_prior_term_without_events_is_none(self):
+        # Fall 2024 exists but has no events: nothing to compare.
+        self.assertIsNone(self._rows()[str(self.last_term.id)]['prior'])
