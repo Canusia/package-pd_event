@@ -759,3 +759,117 @@ class DuplicateDisplayTests(DuplicateInviteTests):
         self.assertNotIn('Merge duplicate invites', self._get(event_summary_view, self.event.id).content.decode())
         self._duplicate_ann()
         self.assertIn('Merge duplicate invites', self._get(event_summary_view, self.event.id).content.decode())
+
+
+class FollowupTests(_Fixture):
+    """#16: unmarked-attendance reminders and missed-required emails."""
+
+    BASE = {
+        'remind_unmarked_attendance': True, 'unmarked_attendance_days': 1,
+        'unmarked_attendance_recipients': 'pd-office@x.com',
+        'email_missed_required': True,
+        'missed_required_subject': 'You missed {{event_type}}',
+        'missed_required_template': 'Hi {{attendee_first_name}}, make-up options for {{term}}.',
+        'followup_debug_email_list': 'debug@x.com',
+    }
+
+    def _run(self, debug=False, **overrides):
+        from cis.models.settings import Setting
+        from .services import followups
+        Setting.objects.update_or_create(key='pd_event', defaults={'value': {**self.BASE, **overrides}})
+        with mock.patch.object(followups, 'send_html_mail') as send, \
+                self.settings(DEBUG=debug):
+            result = followups.run()
+        return result, [(c.args[0], c.args[4]) for c in send.call_args_list]
+
+    def test_unmarked_reminder_once_per_event(self):
+        _, sent = self._run(email_missed_required=False)
+        self.assertEqual(len(sent), 1)
+        subject, to = sent[0]
+        self.assertEqual(to, ['pd-office@x.com'])
+        self.assertIn('attendance', subject.lower())
+        _, again = self._run(email_missed_required=False)
+        self.assertEqual(again, [])
+
+    def test_no_reminder_when_all_marked_or_not_ended(self):
+        for guest in (self.eve, self.fay):
+            guest.meta['attendance_status'] = ATTENDED
+            guest.save()
+        _, sent = self._run(email_missed_required=False)
+        self.assertEqual(sent, [])
+        Event.objects.filter(pk=self.event.pk).update(end_time=timezone.now() + timedelta(hours=2))
+        self.eve.meta['attendance_status'] = UNMARKED
+        self.eve.save()
+        _, sent = self._run(email_missed_required=False)
+        self.assertEqual(sent, [])
+
+    def test_reminder_defaults_to_the_event_creator(self):
+        _, sent = self._run(email_missed_required=False, unmarked_attendance_recipients='')
+        self.assertEqual(sent[0][1], [self.ce_user.email])
+
+    def test_missed_required_email_once(self):
+        _, sent = self._run(remind_unmarked_attendance=False)
+        bob_email = self.bob.course_certificate.teacher_highschool.teacher.user.email
+        self.assertEqual(sent, [(f'You missed {self.event_type.name}', [bob_email])])
+        self.bob.refresh_from_db()
+        self.assertTrue(self.bob.meta.get('missed_required_emailed_on'))
+        _, again = self._run(remind_unmarked_attendance=False)
+        self.assertEqual(again, [])
+
+    def test_off_sends_nothing(self):
+        _, sent = self._run(remind_unmarked_attendance=False, email_missed_required=False)
+        self.assertEqual(sent, [])
+
+    def test_debug_goes_to_the_debug_list_only(self):
+        _, sent = self._run(debug=True)
+        self.assertTrue(sent)
+        self.assertTrue(all(to == ['debug@x.com'] for _, to in sent))
+        _, none = self._run(debug=True, followup_debug_email_list='')
+        self.assertEqual(none, [])
+
+    def test_old_events_are_left_alone(self):
+        Event.objects.filter(pk=self.event.pk).update(
+            start_time=timezone.now() - timedelta(days=90),
+            end_time=timezone.now() - timedelta(days=90))
+        _, sent = self._run()
+        self.assertEqual(sent, [])
+
+    def test_dry_run_sends_and_saves_nothing(self):
+        from cis.models.settings import Setting
+        from .services import followups
+        Setting.objects.update_or_create(key='pd_event', defaults={'value': self.BASE})
+        with mock.patch.object(followups, 'send_html_mail') as send:
+            summary, log = followups.run(dry_run=True)
+        send.assert_not_called()
+        self.bob.refresh_from_db()
+        self.assertNotIn('missed_required_emailed_on', self.bob.meta)
+        self.assertEqual(len(log['missed_required']), 1)
+
+    def test_saving_settings_schedules_the_command(self):
+        from cis.models.crontab import CronTab
+        from .settings.pd_event import pd_event as form_class
+        request = RequestFactory().get('/x')
+        request.user = self.ce_user
+        form = form_class(request, data={
+            'pd_email_subject': 'Your PD letter', 'pd_template': '<p>x</p>',
+            'pd_email_template': '<p>x</p>', 'event_signin_template': '<p>x</p>',
+            'remind_unmarked_attendance': 'on', 'unmarked_attendance_days': '2',
+            'followup_cron': '0 7 * * *'})
+        self.assertTrue(form.is_valid(), form.errors)
+        value = form._to_python()
+        self.assertTrue(value['remind_unmarked_attendance'])
+        self.assertEqual(CronTab.objects.get(command='pd_event_followups').cron, '0 7 * * *')
+
+
+class FollowupCommandTests(FollowupTests):
+    def test_command_dry_run(self):
+        from django.core.management import call_command
+        from cis.models.settings import Setting
+        from .services import followups
+        Setting.objects.update_or_create(key='pd_event', defaults={'value': self.BASE})
+        out = io.StringIO()
+        with mock.patch.object(followups, 'send_html_mail') as send:
+            call_command('pd_event_followups', '--dry-run', stdout=out)
+        send.assert_not_called()
+        self.assertIn('Would send: 1 event(s)', out.getvalue())
+        self.assertIn('missed required: Bob Teacher', out.getvalue())

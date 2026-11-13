@@ -92,8 +92,86 @@ class SettingForm(forms.Form):
         label="PD Letter Email Template")
 
 
+    # Automatic follow-ups (#16). Off by default.
+    remind_unmarked_attendance = forms.BooleanField(
+        required=False,
+        label='Remind CE when an event ends with attendance not marked',
+        help_text='One email per run listing ended events that still have guests not marked. '
+                  'Each event is reminded about once.',
+    )
+    unmarked_attendance_days = forms.IntegerField(
+        required=False,
+        min_value=0,
+        initial=1,
+        label='Days after the event ends',
+    )
+    unmarked_attendance_recipients = forms.CharField(
+        required=False,
+        label='Send attendance reminders to',
+        help_text='Comma-separated emails. Blank sends each reminder to whoever created the event.',
+    )
+    email_missed_required = forms.BooleanField(
+        required=False,
+        label='Email guests who missed a required event',
+        help_text='Sent once to each guest marked Not Attended for a required event that '
+                  'ended in the last 30 days.',
+    )
+    missed_required_subject = forms.CharField(
+        required=False,
+        label='Missed required event email subject',
+    )
+    missed_required_template = forms.CharField(
+        required=False,
+        widget=forms.Textarea,
+        validators=[validate_html_short_code],
+        help_text='{{attendee_first_name}}, {{attendee_last_name}}, {{course}}, {{term}}, '
+                  '{{start_date_time}}, {{end_date_time}}, {{event_type}}, {{delivery_mode}}, '
+                  '{{description}}',
+        label='Missed required event email',
+    )
+    followup_cron = forms.CharField(
+        required=False,
+        initial='0 7 * * *',
+        label='Follow-ups schedule (cron)',
+        help_text='When the pd_event_followups command runs. Default: 7am daily.',
+    )
+    followup_debug_email_list = forms.CharField(
+        required=False,
+        label='Follow-up debug email list',
+        help_text='Comma-separated. On a DEBUG site, follow-ups go only here (or nowhere if blank).',
+    )
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+
+    def clean(self):
+        data = super().clean()
+        if data.get('email_missed_required') and not data.get('missed_required_subject'):
+            self.add_error('missed_required_subject', 'Needed to email guests who missed a required event.')
+        if data.get('email_missed_required') and not data.get('missed_required_template'):
+            self.add_error('missed_required_template', 'Needed to email guests who missed a required event.')
+        cron = (data.get('followup_cron') or '').strip()
+        if cron:
+            try:
+                from cis.validators import validate_cron
+                validate_cron(cron)
+            except ImportError:
+                pass
+            except ValidationError as e:
+                self.add_error('followup_cron', e)
+        return data
+
+    def _schedule_followups(self):
+        """Create or update the cron row when a follow-up is on. Turned off,
+        the row stays (deleting it would drop its run history); the command
+        does nothing then."""
+        if not (self.cleaned_data.get('remind_unmarked_attendance')
+                or self.cleaned_data.get('email_missed_required')):
+            return
+        from cis.models.crontab import CronTab
+        cron, _ = CronTab.objects.get_or_create(command='pd_event_followups')
+        cron.cron = (self.cleaned_data.get('followup_cron') or '0 7 * * *').strip()
+        cron.save()
 
     def _to_python(self):
         """
@@ -108,6 +186,21 @@ class SettingForm(forms.Form):
             'event_signin_template': self.cleaned_data.get('event_signin_template'),
             'pd_email_subject': self.cleaned_data.get('pd_email_subject'),
             'pd_email_template': self.cleaned_data.get('pd_email_template'),
+            **self._followups(),
+        }
+
+    def _followups(self):
+        self._schedule_followups()
+        days = self.cleaned_data.get('unmarked_attendance_days')
+        return {
+            'remind_unmarked_attendance': bool(self.cleaned_data.get('remind_unmarked_attendance')),
+            'unmarked_attendance_days': 1 if days is None else days,
+            'unmarked_attendance_recipients': self.cleaned_data.get('unmarked_attendance_recipients', ''),
+            'email_missed_required': bool(self.cleaned_data.get('email_missed_required')),
+            'missed_required_subject': self.cleaned_data.get('missed_required_subject', ''),
+            'missed_required_template': self.cleaned_data.get('missed_required_template', ''),
+            'followup_cron': (self.cleaned_data.get('followup_cron') or '0 7 * * *').strip(),
+            'followup_debug_email_list': self.cleaned_data.get('followup_debug_email_list', ''),
         }
 
 class pd_event(SettingForm):
@@ -132,6 +225,18 @@ class pd_event(SettingForm):
             'event_signin_template': "Change this in Settings -> Misc -> PD Event",
             'pd_email_subject': "Change this in Settings -> Misc -> PD Event",
             'pd_email_template': "Change this in Settings -> Misc -> PD Event",
+            # Follow-ups (#16): off until CE turns them on.
+            'remind_unmarked_attendance': False,
+            'unmarked_attendance_days': 1,
+            'unmarked_attendance_recipients': '',
+            'email_missed_required': False,
+            'missed_required_subject': 'You missed a required PD event: {{event_type}}',
+            'missed_required_template': (
+                '<p>Hi {{attendee_first_name}},</p><p>Our records show you did not attend '
+                '{{event_type}} on {{start_date_time}} ({{term}}), which was required. '
+                'Please contact us about make-up options.</p>'),
+            'followup_cron': '0 7 * * *',
+            'followup_debug_email_list': '',
         }
 
         _install_defaults(self.key, defaults)
