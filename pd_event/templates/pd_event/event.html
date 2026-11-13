@@ -98,13 +98,50 @@
                                                 });
                                             });
                                         </script>
+                                        <div id="event_overview" class="{% if edit_open %}d-none{% endif %}">
+                                            <div class="d-flex justify-content-between align-items-start mb-2">
+                                                <h2 class="h5 mb-0">{{ record.name|default:record.event_type }}</h2>
+                                                {% if not read_only %}
+                                                <button type="button" id="btn_edit_event" class="btn btn-sm btn-primary"><i class="fa fa-edit"></i>&nbsp;Edit</button>
+                                                {% endif %}
+                                            </div>
+                                            <dl class="row mb-0">
+                                                <dt class="col-sm-3">Event type</dt><dd class="col-sm-9">{{ record.event_type }}</dd>
+                                                <dt class="col-sm-3">Term</dt><dd class="col-sm-9">{{ record.term.label }}</dd>
+                                                <dt class="col-sm-3">Starts</dt><dd class="col-sm-9">{% if record.start_time %}{{ record.start_time_local|date:'m/d/Y g:i A' }}{% else %}–{% endif %}</dd>
+                                                <dt class="col-sm-3">Ends</dt><dd class="col-sm-9">{% if record.end_time %}{{ record.end_time_local|date:'m/d/Y g:i A' }}{% else %}–{% endif %}</dd>
+                                                <dt class="col-sm-3">Delivery mode</dt><dd class="col-sm-9">{{ record.delivery_mode|default:'–' }}</dd>
+                                                <dt class="col-sm-3">PD hours</dt><dd class="col-sm-9">{{ record.pd_hour|default_if_none:'–' }}</dd>
+                                                {% if track_cost %}
+                                                <dt class="col-sm-3">Cost per attendee</dt><dd class="col-sm-9">{% if record.cost_per_attendee %}${{ record.cost_per_attendee|floatformat:2 }}{% else %}–{% endif %}</dd>
+                                                {% endif %}
+                                                <dt class="col-sm-3">Course(s)</dt><dd class="col-sm-9">{% for course in record.courses.all %}{{ course.name }}{% if not forloop.last %}, {% endif %}{% empty %}–{% endfor %}</dd>
+                                                <dt class="col-sm-3">Subject(s)</dt><dd class="col-sm-9">{{ record.cohorts }}</dd>
+                                                <dt class="col-sm-3">Description</dt><dd class="col-sm-9">{{ record.description|default:'–'|linebreaksbr }}</dd>
+                                            </dl>
+                                        </div>
+                                        <div id="event_edit_form" class="{% if not edit_open %}d-none{% endif %}">
                                         {{form.media}}
                                         <form action="" method="post">
                                             {% csrf_token %}
                                             {{ form | crispy }}
                                             <input type="submit" class="btn btn-primary btn-sm" value="Update">&nbsp;
+                                            <input type="button" id="btn_cancel_edit_event" class="btn btn-secondary btn-sm" value="Cancel">&nbsp;
                                             <input type="button" value="Delete" class="btn btn-danger btn-sm delete float-right pull-right">
                                         </form>
+                                        </div>
+                                        <script>
+                                            jQuery(document).ready(function ($) {
+                                                $('#btn_edit_event').on('click', function () {
+                                                    $('#event_overview').addClass('d-none');
+                                                    $('#event_edit_form').removeClass('d-none');
+                                                });
+                                                $('#btn_cancel_edit_event').on('click', function () {
+                                                    $('#event_edit_form').addClass('d-none');
+                                                    $('#event_overview').removeClass('d-none');
+                                                });
+                                            });
+                                        </script>
                                     </div>
                                 </div>
                             </div>

@@ -430,3 +430,30 @@ class GetInfoTests(_Fixture):
         orphan = EventAttendee.objects.create(event=self.event, type='faculty', meta={
             'id': str(uuid.uuid4()), 'attendance_type': 'optional', 'attendance_status': 'N/A'})
         self.assertEqual(orphan.get_info()['first_name'], '-')
+
+
+class DetailsOverviewTests(_Fixture):
+    """#13: Details is a read-only overview; Edit opens the form."""
+
+    def _page(self, method='get', **data):
+        from .views.event import detail
+        request = getattr(RequestFactory(), method)('/x', data)
+        request.user = self.ce_user
+        request._messages = mock.MagicMock()
+        return detail(request, self.event.id).content.decode()
+
+    def test_overview_shows_the_event_and_hides_the_form(self):
+        self.event.description = 'Line one\nLine <b>two</b>'
+        self.event.courses.add(self.eng)
+        self.event.save()
+        html = self._page()
+        overview = html[html.index('id="event_overview"'):html.index('id="event_edit_form"')]
+        for text in ('Fall Workshop', 'Online', 'Fall 2026', 'ENG 101', 'Line one<br>Line &lt;b&gt;two&lt;/b&gt;'):
+            self.assertIn(text, overview)
+        self.assertIn('id="btn_edit_event"', overview)
+        self.assertRegex(html, r'id="event_edit_form"[^>]*class="[^"]*d-none')
+
+    def test_invalid_edit_reopens_the_form(self):
+        html = self._page('post', action='edit_event', name='')
+        self.assertNotRegex(html, r'id="event_edit_form"[^>]*class="[^"]*d-none')
+        self.assertRegex(html, r'id="event_overview"[^>]*class="[^"]*d-none')

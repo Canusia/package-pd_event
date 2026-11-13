@@ -189,15 +189,20 @@ def event_attendees(event):
     return EventAttendee.objects.filter(event=event).select_related(*ATTENDEE_RELATED)
 
 
+def track_cost():
+    """The PD event setting 'Track PD event cost'."""
+    try:
+        from cis.settings.pd_event import pd_event as pd_settings
+        return bool(pd_settings.from_db().get('track_pd_event_cost'))
+    except Exception:  # settings unavailable
+        return False
+
+
 def event_summary(event):
     summary = summarize(event_attendees(event))
     summary['total_cost'] = None
-    try:
-        from cis.settings.pd_event import pd_event as pd_settings
-        if pd_settings.from_db().get('track_pd_event_cost') and event.cost_per_attendee:
-            summary['total_cost'] = round(event.cost_per_attendee * summary['attended'], 2)
-    except Exception:  # settings unavailable: no cost card
-        pass
+    if track_cost() and event.cost_per_attendee:
+        summary['total_cost'] = round(event.cost_per_attendee * summary['attended'], 2)
     return summary
 
 

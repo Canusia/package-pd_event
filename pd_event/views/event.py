@@ -29,6 +29,7 @@ from cis.models.teacher import (
 
 from ..models import EventType, Event, EventFile, EventAttendee
 from ..serializers import EventSerializer
+from ..services.summary import track_cost
 from ..forms import EventForm, EventFileForm, EventAttendeeFilterForm, EventEmailForm
 
 from cis.menu import cis_menu, draw_menu, FACULTY_MENU
@@ -783,8 +784,12 @@ def detail(request, record_id):
             'menu': menu,
             'notes': notes,
             'summary': event_summary(record),
+            # A failed save shows the form again, with its errors (#13).
+            'edit_open': request.method == 'POST' and request.POST.get('action') == 'edit_event',
+            'track_cost': track_cost(),
             'record': record
         })
+
 
 
 def event_summary(record):
