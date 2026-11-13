@@ -1057,3 +1057,77 @@ class RsvpSummaryDisplayTests(_Fixture):
         html = self._get(event_summary_view, self.event.id).content.decode()
         self.assertIn('1 confirmed', html)
         self.assertIn('1 no-show', html)
+
+
+class ReviewFixTests(DuplicateInviteTests):
+    """Pre-release review fixes (#10, #11, #14, #16)."""
+
+    def test_merge_carries_rsvp_and_emailed_flags(self):
+        from .services.summary import merge_duplicates
+        self._duplicate_ann(status=NOT_ATTENDED, kind='required', rsvp='confirmed',
+                            missed_required_emailed_on='11/02/2026')
+        merge_duplicates(self.event)
+        kept = self._rows_for(self.ann.course_certificate.teacher_highschool).get()
+        self.assertEqual(kept.meta['rsvp'], 'confirmed')
+        self.assertEqual(kept.meta['missed_required_emailed_on'], '11/02/2026')
+
+    def test_merge_is_all_or_nothing(self):
+        from .services.summary import merge_duplicates
+        dup = self._duplicate_ann()
+        with mock.patch.object(EventAttendee, 'save', side_effect=RuntimeError('db down')):
+            with self.assertRaises(RuntimeError):
+                merge_duplicates(self.event)
+        self.assertTrue(EventAttendee.objects.filter(pk=dup.pk).exists())
+
+    def test_required_invite_upgrades_a_combined_row(self):
+        from .views.event import add_attendee
+        request = RequestFactory().post('/x', {
+            'attendee': [str(self.ann_mth.certificate_id)], 'attendance_type': 'required',
+            'type': 'instructor'})
+        request.user = self.ce_user
+        self.ann.meta['attendance_type'] = 'optional'
+        self.ann.save()
+        add_attendee(request, self.event.id)
+        self.ann.refresh_from_db()
+        self.assertEqual(self.ann.meta['attendance_type'], 'required')
+
+    def test_guest_search_needs_ce_or_faculty(self):
+        from django.core.exceptions import PermissionDenied
+        from .views.event import search_guest_list
+        outsider = CustomUser.objects.create_user(
+            username=_u('o'), email=f'{_u("o")}@x.com', password='x')
+        request = RequestFactory().get('/x', {'attendee_type': 'highschool_admin',
+                                              'highschool': [str(self.north.id)]})
+        request.user = outsider
+        with self.assertRaises(PermissionDenied):
+            search_guest_list(request)
+
+    def test_new_ce_actions_refuse_others(self):
+        from django.core.exceptions import PermissionDenied
+        from .views.event import merge_duplicates, set_rsvp
+        outsider = CustomUser.objects.create_user(
+            username=_u('o'), email=f'{_u("o")}@x.com', password='x')
+        for view in (merge_duplicates, set_rsvp):
+            with self.assertRaises(PermissionDenied):
+                self._post(view, self.event.id, user=outsider, attendee=[str(self.ann.id)])
+
+    def test_bad_ids_do_not_500(self):
+        from .views.event import search_guest_list, set_rsvp
+        resp = self._post(set_rsvp, self.event.id, attendee=['nope'], rsvp='confirmed')
+        self.assertEqual(json.loads(resp.content)['status'], 'error')  # nothing valid selected
+        request = RequestFactory().get('/x', {'attendee_type': 'instructor',
+                                              'teaching_term': 'nope',
+                                              'instructor_course_status': ['Teaching']})
+        request.user = self.ce_user
+        self.assertEqual(search_guest_list(request).status_code, 200)
+
+    def test_followup_days_limits(self):
+        from .settings.pd_event import pd_event as form_class
+        request = RequestFactory().get('/x')
+        request.user = self.ce_user
+        form = form_class(request, data={
+            'pd_email_subject': 's', 'pd_template': '<p>x</p>', 'pd_email_template': '<p>x</p>',
+            'event_signin_template': '<p>x</p>', 'remind_unmarked_attendance': 'on',
+            'unmarked_attendance_days': '45'})
+        self.assertFalse(form.is_valid())
+        self.assertIn('unmarked_attendance_days', form.errors)

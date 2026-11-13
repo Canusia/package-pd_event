@@ -50,7 +50,10 @@ def ce_dashboard(request):
 @page_message('highschool_admin', 'dashboard')
 def hs_admin_dashboard(request):
     """Instructors at the admin's schools who missed a required PD event."""
-    from .services.summary import school_history
+    from types import SimpleNamespace
+
+    from .models import EventAttendee
+    from .services.summary import is_required_missed
     from .views.highschool_admin import admin_highschool_ids
 
     try:
@@ -59,8 +62,12 @@ def hs_admin_dashboard(request):
         return None
     if not highschool_ids:
         return None
-    missed = {tuple(r['person'][:2]) for r in school_history(highschool_ids)['rows']
-              if r['required_missed']}
+    # One light query (meta + teacher id), not the full history.
+    missed = {teacher for teacher, meta in EventAttendee.objects.filter(
+        course_certificate__teacher_highschool__highschool_id__in=highschool_ids,
+        meta__attendance_type__iexact='required',
+    ).values_list('course_certificate__teacher_highschool__teacher_id', 'meta')
+        if is_required_missed(SimpleNamespace(meta=meta or {}))}
     if not missed:
         return None
     n = len(missed)

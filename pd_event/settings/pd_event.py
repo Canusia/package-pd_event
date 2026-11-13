@@ -102,8 +102,10 @@ class SettingForm(forms.Form):
     unmarked_attendance_days = forms.IntegerField(
         required=False,
         min_value=0,
+        max_value=29,  # follow-ups look back 30 days
         initial=1,
         label='Days after the event ends',
+        help_text='0 to 29.',
     )
     unmarked_attendance_recipients = forms.CharField(
         required=False,

@@ -143,8 +143,22 @@ def merge_duplicates(event):
     strongest row (attended, then not attended, then not marked; a sent
     letter wins a tie); required if any was; courses, notes, hours and the
     letter date are carried over. Returns the number of rows removed."""
+    from django.db import transaction
+
+    with transaction.atomic():
+        return _merge_duplicates(event)
+
+
+# Per-row flags a merged row keeps from any duplicate when it lacks them.
+CARRIED_FLAGS = ('rsvp', 'rsvp_by', 'rsvp_on', 'missed_required_emailed_on')
+
+
+def _merge_duplicates(event):
+    from ..models import EventAttendee
     groups = OrderedDict()
-    for a in event_attendees(event).order_by('id'):
+    # Lock the guest rows only: the joined certificate side can be NULL.
+    rows = EventAttendee.objects.select_for_update(of=('self',)).filter(event=event).order_by('id')
+    for a in rows.select_related(*ATTENDEE_RELATED):
         groups.setdefault(person_key(a), []).append(a)
 
     removed = 0
@@ -173,11 +187,17 @@ def merge_duplicates(event):
                 meta['pd_letter_sent_on'] = sent[0]
         if status_key(keep) == KEY_ATTENDED:
             meta['pd_hour'] = max([pd_hours(a) for a in rows] + [pd_hours(keep)])
+        for key in CARRIED_FLAGS:
+            if not meta.get(key):
+                found = [a.meta.get(key) for a in others if (a.meta or {}).get(key)]
+                if found:
+                    meta[key] = found[0]
+        # Save the kept row first: a failure then leaves every row in place.
+        keep.meta = meta
+        keep.save()
         for a in others:
             a.delete()
             removed += 1
-        keep.meta = meta
-        keep.save()
     return removed
 
 

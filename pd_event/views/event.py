@@ -416,11 +416,17 @@ def add_attendee(request, record_id):
                 existing = by_teacher.get(cert.teacher_highschool.teacher_id)
                 if existing is not None:
                     courses = courses_of(existing)
-                    if cert.course.name not in courses:
+                    changed = cert.course.name not in courses
+                    if changed:
                         courses.append(cert.course.name)
                     existing.meta['courses'] = courses
-                    existing.save()
-                    num_combined += 1
+                    # Required for any course makes the person required.
+                    if attendance_type == 'required' and existing.meta.get('attendance_type') != 'required':
+                        existing.meta['attendance_type'] = 'required'
+                        changed = True
+                    if changed:
+                        existing.save()
+                        num_combined += 1
                     continue
             elif EventAttendee.objects.filter(
                     event=event, type=attendee_type, meta__id=str(r)).exists():
@@ -469,7 +475,7 @@ def set_rsvp(request, record_id):
         raise PermissionDenied
     event = get_object_or_404(Event, pk=record_id)
     answer = request.POST.get('rsvp', '')
-    ids = request.POST.getlist('attendee')
+    ids = _uuids(request.POST.getlist('attendee'))
     if not ids:
         return JsonResponse({'status': 'error', 'message': 'Please select a record and try again'})
     rows = EventAttendee.objects.filter(event=event, id__in=ids)
@@ -677,7 +683,22 @@ def get_courses(request):
     
     return JsonResponse(result)
 
+def _uuids(values):
+    """The values that are UUIDs (bad ids are dropped, not a 500)."""
+    import uuid
+    out = []
+    for value in values:
+        try:
+            out.append(str(uuid.UUID(str(value))))
+        except (TypeError, ValueError):
+            continue
+    return out
+
+
 def search_guest_list(request):
+    # Returns names and emails of staff and instructors: CE and faculty only.
+    if not (user_has_cis_role(request.user) or user_has_faculty_role(request.user)):
+        raise PermissionDenied
     attendee_type = request.GET.get('attendee_type', 'instructor')
     cohort = request.GET.getlist('cohort')
     course = request.GET.getlist('course')
@@ -732,8 +753,8 @@ def search_guest_list(request):
         # High school personnel with an active position at the chosen
         # schools or districts (#12).
         from cis.models.highschool_administrator import HSAdministrator
-        highschools = [h for h in request.GET.getlist('highschool') if h]
-        districts = [d for d in request.GET.getlist('district') if d]
+        highschools = _uuids(request.GET.getlist('highschool'))
+        districts = _uuids(request.GET.getlist('district'))
         if not (highschools or districts):
             return JsonResponse({
                 'data': [],
@@ -744,8 +765,15 @@ def search_guest_list(request):
             position_q &= Q(hsadministratorposition__highschool__id__in=highschools)
         if districts:
             position_q &= Q(hsadministratorposition__highschool__district__id__in=districts)
+        from django.db.models import Prefetch
+        from cis.models.highschool_administrator import HSAdministratorPosition
         records = HSAdministrator.objects.filter(position_q).distinct().select_related(
-            'user').order_by('user__last_name', 'user__first_name')
+            'user').prefetch_related(Prefetch(
+                'hsadministratorposition_set',
+                queryset=HSAdministratorPosition.objects.filter(
+                    status__iexact='active').select_related('highschool', 'position'),
+                to_attr='active_positions')
+            ).order_by('user__last_name', 'user__first_name')
         for record in records:
             result['data'].append({
                 'id': str(record.id),
@@ -771,9 +799,9 @@ def search_guest_list(request):
     elif attendee_type == 'instructor':
         # Any mix of course, term taught, high school and district (#11), so
         # an event with no courses can still find its guests.
-        teaching_term = request.GET.get('teaching_term')
-        highschools = [h for h in request.GET.getlist('highschool') if h]
-        districts = [d for d in request.GET.getlist('district') if d]
+        teaching_term = (_uuids([request.GET.get('teaching_term')]) or [None])[0]
+        highschools = _uuids(request.GET.getlist('highschool'))
+        districts = _uuids(request.GET.getlist('district'))
         course = [c for c in course if c]
         if not (course or teaching_term or highschools or districts):
             return JsonResponse({
@@ -816,6 +844,9 @@ def search_guest_list(request):
     return JsonResponse(result)
 
 def _active_positions(hsadmin):
+    prefetched = getattr(hsadmin, 'active_positions', None)
+    if prefetched is not None:
+        return prefetched
     from cis.models.highschool_administrator import HSAdministratorPosition
     return HSAdministratorPosition.objects.filter(
         hsadmin=hsadmin, status__iexact='active').select_related('highschool', 'position')

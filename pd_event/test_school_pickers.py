@@ -44,8 +44,14 @@ from .views.event import search_guest_list
 
 class _Base(_Base):
     def _names(self):
+        from django.contrib.auth.models import Group
+        from cis.models import CustomUser
+        user = CustomUser.objects.create_user(
+            username=f'ce-{_sfx()}', email=f'ce-{_sfx()}@x.com', password='x')
+        user.groups.add(Group.objects.get_or_create(name='ce')[0])
         request = RequestFactory().get(
             '/x', {'attendee_type': 'highschool'})
+        request.user = user  # the guest search is CE/faculty only
         data = json.loads(search_guest_list(request).content)['data']
         return [r['name'] for r in data]
 

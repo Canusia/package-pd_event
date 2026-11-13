@@ -22,6 +22,7 @@ from collections import OrderedDict
 
 from django.conf import settings
 from django.template import Context, Template
+from django.utils.html import escape
 from django.template.loader import get_template
 from django.utils import timezone
 
@@ -77,8 +78,9 @@ def _ended_events(days):
 
 
 def remind_unmarked(config, dry_run=False):
+    days = config.get('unmarked_attendance_days')
     try:
-        days = max(0, int(config.get('unmarked_attendance_days') or 1))
+        days = min(LOOKBACK_DAYS - 1, max(0, int(1 if days in (None, '') else days)))
     except (TypeError, ValueError):
         days = 1
 
@@ -98,8 +100,8 @@ def remind_unmarked(config, dry_run=False):
     log = []
     for to, events in digests.items():
         lines = ''.join(
-            f'<li><a href="{getDomain()}{event.ce_url}">{event.name or event.event_type}</a>'
-            f' ({event.term.label}, {timezone.localtime(event.end_time).strftime("%m/%d/%Y")}):'
+            f'<li><a href="{getDomain()}{event.ce_url}">{escape(event.name or event.event_type)}</a>'
+            f' ({escape(event.term.label)}, {timezone.localtime(event.end_time).strftime("%m/%d/%Y")}):'
             f' {unmarked} guest(s) not marked</li>'
             for event, unmarked in events)
         body = (f'<p>These PD events have ended but attendance is not fully marked:</p>'
